@@ -6,8 +6,6 @@ export default function LogoIcon(props: React.ComponentProps<"svg">) {
       xmlns="http://www.w3.org/2000/svg"
       aria-label={`${process.env.SITE_NAME} logo`}
       viewBox="0 0 704.29 169.53"
-      width="704.29"
-      height="169.53"
       {...props}
       className={clsx("fill-black dark:fill-white", props.className)}
     >

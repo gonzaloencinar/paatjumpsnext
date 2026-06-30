@@ -27,7 +27,7 @@ export async function Navbar() {
             className="mr-2 flex w-full items-center justify-center md:w-auto lg:mr-6"
             aria-label={SITE_NAME}
           >
-            <LogoIcon className="h-7 w-auto shrink-0" />
+            <LogoIcon className="h-7 w-auto" />
           </Link>
           {menu.length ? (
             <ul className="hidden gap-6 text-sm md:flex md:items-center">
