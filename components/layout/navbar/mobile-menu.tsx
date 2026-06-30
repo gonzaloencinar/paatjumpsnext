@@ -5,11 +5,19 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useEffect, useState } from "react";
 
-import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
-import { Menu } from "lib/shopify/types";
+import {
+  ArrowRightIcon,
+  Bars3Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+import type { CategoryMenuItem } from "./category-menu";
 import Search, { SearchSkeleton } from "./search";
 
-export default function MobileMenu({ menu }: { menu: Menu[] }) {
+export default function MobileMenu({
+  categories = [],
+}: {
+  categories?: CategoryMenuItem[];
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
@@ -35,7 +43,7 @@ export default function MobileMenu({ menu }: { menu: Menu[] }) {
       <button
         onClick={openMobileMenu}
         aria-label="Open mobile menu"
-        className="flex h-11 w-11 items-center justify-center rounded-md border border-neutral-200 text-black transition-colors md:hidden dark:border-neutral-700 dark:text-white"
+        className="flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white transition-colors md:hidden"
       >
         <Bars3Icon className="h-4" />
       </button>
@@ -64,7 +72,7 @@ export default function MobileMenu({ menu }: { menu: Menu[] }) {
             <Dialog.Panel className="fixed bottom-0 left-0 right-0 top-0 flex h-full w-full flex-col bg-white pb-6 dark:bg-black">
               <div className="p-4">
                 <button
-                  className="mb-4 flex h-11 w-11 items-center justify-center rounded-md border border-neutral-200 text-black transition-colors dark:border-neutral-700 dark:text-white"
+                  className="mb-4 flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white transition-colors"
                   onClick={closeMobileMenu}
                   aria-label="Close mobile menu"
                 >
@@ -76,23 +84,37 @@ export default function MobileMenu({ menu }: { menu: Menu[] }) {
                     <Search />
                   </Suspense>
                 </div>
-                {menu.length ? (
-                  <ul className="flex w-full flex-col">
-                    {menu.map((item: Menu) => (
-                      <li
-                        className="py-2 text-xl text-black transition-colors hover:text-neutral-500 dark:text-white"
-                        key={item.title}
-                      >
-                        <Link
-                          href={item.path}
-                          prefetch={true}
-                          onClick={closeMobileMenu}
+                {categories.length ? (
+                  <div className="mt-2 w-full">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+                      Categorías
+                    </p>
+                    <ul className="flex w-full flex-col">
+                      {categories.map((category) => (
+                        <li
+                          className="py-2 text-lg text-white transition-colors hover:text-orange-400"
+                          key={category.handle || category.path}
                         >
-                          {item.title}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                          <Link
+                            href={category.path}
+                            prefetch={true}
+                            onClick={closeMobileMenu}
+                          >
+                            {category.title}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href="/search"
+                      prefetch={true}
+                      onClick={closeMobileMenu}
+                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-600 px-5 py-2.5 text-base font-semibold text-white transition-colors hover:bg-orange-700"
+                    >
+                      Ver todas las combas
+                      <ArrowRightIcon className="h-4 w-4" />
+                    </Link>
+                  </div>
                 ) : null}
               </div>
             </Dialog.Panel>

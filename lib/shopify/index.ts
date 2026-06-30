@@ -20,6 +20,7 @@ import {
 } from "./mutations/cart";
 import { getCartQuery } from "./queries/cart";
 import {
+  getCollectionProductsFilteredQuery,
   getCollectionProductsQuery,
   getCollectionQuery,
   getCollectionsQuery,
@@ -30,6 +31,7 @@ import {
   getProductQuery,
   getProductRecommendationsQuery,
   getProductsQuery,
+  getSearchProductsFilteredQuery,
 } from "./queries/product";
 import {
   Cart,
@@ -43,7 +45,10 @@ import {
   ShopifyCart,
   ShopifyCartOperation,
   ShopifyCollection,
+  ProductFilterFacet,
+  ProductFilterInput,
   ShopifyCollectionOperation,
+  ShopifyCollectionProductsFilteredOperation,
   ShopifyCollectionProductsOperation,
   ShopifyCollectionsOperation,
   ShopifyCreateCartOperation,
@@ -54,6 +59,7 @@ import {
   ShopifyProductOperation,
   ShopifyProductRecommendationsOperation,
   ShopifyProductsOperation,
+  ShopifySearchProductsOperation,
   ShopifyRemoveFromCartOperation,
   ShopifyUpdateCartOperation,
 } from "./types";
@@ -141,7 +147,7 @@ const reshapeCart = (cart: ShopifyCart): Cart => {
 };
 
 const reshapeCollection = (
-  collection: ShopifyCollection
+  collection: ShopifyCollection,
 ): Collection | undefined => {
   if (!collection) {
     return undefined;
@@ -183,7 +189,7 @@ const reshapeImages = (images: Connection<Image>, productTitle: string) => {
 
 const reshapeProduct = (
   product: ShopifyProduct,
-  filterHiddenProducts: boolean = true
+  filterHiddenProducts: boolean = true,
 ) => {
   if (
     !product ||
@@ -226,7 +232,7 @@ export async function createCart(): Promise<Cart> {
 }
 
 export async function addToCart(
-  lines: { merchandiseId: string; quantity: number }[]
+  lines: { merchandiseId: string; quantity: number }[],
 ): Promise<Cart> {
   const cartId = (await cookies()).get("cartId")?.value!;
   const res = await shopifyFetch<ShopifyAddToCartOperation>({
@@ -253,7 +259,7 @@ export async function removeFromCart(lineIds: string[]): Promise<Cart> {
 }
 
 export async function updateCart(
-  lines: { id: string; merchandiseId: string; quantity: number }[]
+  lines: { id: string; merchandiseId: string; quantity: number }[],
 ): Promise<Cart> {
   const cartId = (await cookies()).get("cartId")?.value!;
   const res = await shopifyFetch<ShopifyUpdateCartOperation>({
@@ -292,7 +298,7 @@ export async function getCart(): Promise<Cart | undefined> {
 }
 
 export async function getCollection(
-  handle: string
+  handle: string,
 ): Promise<Collection | undefined> {
   "use cache";
   cacheTag(TAGS.collections);
@@ -323,7 +329,7 @@ export async function getCollectionProducts({
 
   if (!endpoint) {
     console.log(
-      `Skipping getCollectionProducts for '${collection}' - Shopify not configured`
+      `Skipping getCollectionProducts for '${collection}' - Shopify not configured`,
     );
     return [];
   }
@@ -343,8 +349,55 @@ export async function getCollectionProducts({
   }
 
   return reshapeProducts(
-    removeEdgesAndNodes(res.body.data.collection.products)
+    removeEdgesAndNodes(res.body.data.collection.products),
   );
+}
+
+// Faceted variant of `getCollectionProducts`: applies structured `filters` and
+// returns both the products and the available facets for the (filtered) set.
+export async function getCollectionWithFilters({
+  collection,
+  reverse,
+  sortKey,
+  filters,
+}: {
+  collection: string;
+  reverse?: boolean;
+  sortKey?: string;
+  filters?: ProductFilterInput[];
+}): Promise<{ products: Product[]; filters: ProductFilterFacet[] }> {
+  "use cache";
+  cacheTag(TAGS.collections, TAGS.products);
+  cacheLife("days");
+
+  if (!endpoint) {
+    console.log(
+      `Skipping getCollectionWithFilters for '${collection}' - Shopify not configured`,
+    );
+    return { products: [], filters: [] };
+  }
+
+  const res = await shopifyFetch<ShopifyCollectionProductsFilteredOperation>({
+    query: getCollectionProductsFilteredQuery,
+    variables: {
+      handle: collection,
+      reverse,
+      sortKey: sortKey === "CREATED_AT" ? "CREATED" : sortKey,
+      filters,
+    },
+  });
+
+  if (!res.body.data.collection) {
+    console.log(`No collection found for \`${collection}\``);
+    return { products: [], filters: [] };
+  }
+
+  return {
+    products: reshapeProducts(
+      removeEdgesAndNodes(res.body.data.collection.products),
+    ),
+    filters: res.body.data.collection.products.filters ?? [],
+  };
 }
 
 export async function getCollections(): Promise<Collection[]> {
@@ -388,7 +441,7 @@ export async function getCollections(): Promise<Collection[]> {
     // Filter out the `hidden` collections.
     // Collections that start with `hidden-*` need to be hidden on the search page.
     ...reshapeCollections(shopifyCollections).filter(
-      (collection) => !collection.handle.startsWith("hidden")
+      (collection) => !collection.handle.startsWith("hidden"),
     ),
   ];
 
@@ -461,7 +514,7 @@ export async function getProduct(handle: string): Promise<Product | undefined> {
 }
 
 export async function getProductRecommendations(
-  productId: string
+  productId: string,
 ): Promise<Product[]> {
   "use cache";
   cacheTag(TAGS.products);
@@ -500,6 +553,47 @@ export async function getProducts({
   });
 
   return reshapeProducts(removeEdgesAndNodes(res.body.data.products));
+}
+
+// Faceted variant of `getProducts` for the search / "Todas" page. Uses the
+// `search` query so facets (`productFilters`) are available across all products.
+// SearchSortKeys only supports RELEVANCE and PRICE; other sort keys collapse to
+// RELEVANCE. An empty `query` returns every product.
+export async function getSearchWithFilters({
+  query,
+  reverse,
+  sortKey,
+  filters,
+}: {
+  query?: string;
+  reverse?: boolean;
+  sortKey?: string;
+  filters?: ProductFilterInput[];
+}): Promise<{ products: Product[]; filters: ProductFilterFacet[] }> {
+  "use cache";
+  cacheTag(TAGS.products);
+  cacheLife("days");
+
+  if (!endpoint) {
+    return { products: [], filters: [] };
+  }
+
+  const isPrice = sortKey === "PRICE";
+
+  const res = await shopifyFetch<ShopifySearchProductsOperation>({
+    query: getSearchProductsFilteredQuery,
+    variables: {
+      query: query ?? "",
+      sortKey: isPrice ? "PRICE" : "RELEVANCE",
+      reverse: isPrice ? reverse : false,
+      filters,
+    },
+  });
+
+  return {
+    products: reshapeProducts(removeEdgesAndNodes(res.body.data.search)),
+    filters: res.body.data.search.productFilters ?? [],
+  };
 }
 
 // This is called from `app/api/revalidate.ts` so providers can control revalidation logic.

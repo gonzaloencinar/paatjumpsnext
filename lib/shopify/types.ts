@@ -213,6 +213,53 @@ export type ShopifyCollectionProductsOperation = {
   };
 };
 
+// ── Faceted filtering ──────────────────────────────────────────────────────
+// A single selectable value within a facet, as returned by the Storefront API.
+// `input` is a JSON-encoded `ProductFilter` (e.g. `{"available":true}`) that can
+// be sent straight back to Shopify to apply the filter.
+export type ProductFilterValue = {
+  id: string;
+  label: string;
+  count: number;
+  input: string;
+};
+
+// An available filter (facet) for a set of products, e.g. "Color" or "Precio".
+export type ProductFilterFacet = {
+  id: string;
+  label: string;
+  type: "LIST" | "PRICE_RANGE" | "BOOLEAN";
+  values: ProductFilterValue[];
+};
+
+// The `ProductFilter` input we send to Shopify. Entries in the array targeting
+// the same attribute are ORed; different attributes are ANDed.
+export type ProductFilterInput = {
+  available?: boolean;
+  price?: { min?: number; max?: number };
+  productType?: string;
+  productVendor?: string;
+  variantOption?: { name: string; value: string };
+  tag?: string;
+  productMetafield?: { namespace: string; key: string; value: string };
+};
+
+export type ShopifyCollectionProductsFilteredOperation = {
+  data: {
+    collection?: {
+      products: {
+        filters: ProductFilterFacet[];
+      } & Connection<ShopifyProduct>;
+    };
+  };
+  variables: {
+    handle: string;
+    reverse?: boolean;
+    sortKey?: string;
+    filters?: ProductFilterInput[];
+  };
+};
+
 export type ShopifyCollectionsOperation = {
   data: {
     collections: Connection<ShopifyCollection>;
@@ -268,5 +315,19 @@ export type ShopifyProductsOperation = {
     query?: string;
     reverse?: boolean;
     sortKey?: string;
+  };
+};
+
+export type ShopifySearchProductsOperation = {
+  data: {
+    search: {
+      productFilters: ProductFilterFacet[];
+    } & Connection<ShopifyProduct>;
+  };
+  variables: {
+    query: string;
+    reverse?: boolean;
+    sortKey?: string;
+    filters?: ProductFilterInput[];
   };
 };

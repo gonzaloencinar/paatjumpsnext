@@ -54,3 +54,41 @@ export const getCollectionProductsQuery = /* GraphQL */ `
   }
   ${productFragment}
 `;
+
+// Same as above but accepts structured `filters` and returns the available
+// facets (`filters`) for the current product set so the UI can be data-driven.
+export const getCollectionProductsFilteredQuery = /* GraphQL */ `
+  query getCollectionProductsFiltered(
+    $handle: String!
+    $sortKey: ProductCollectionSortKeys
+    $reverse: Boolean
+    $filters: [ProductFilter!]
+  ) {
+    collection(handle: $handle) {
+      products(
+        sortKey: $sortKey
+        reverse: $reverse
+        first: 100
+        filters: $filters
+      ) {
+        filters {
+          id
+          label
+          type
+          values {
+            id
+            label
+            count
+            input
+          }
+        }
+        edges {
+          node {
+            ...product
+          }
+        }
+      }
+    }
+  }
+  ${productFragment}
+`;

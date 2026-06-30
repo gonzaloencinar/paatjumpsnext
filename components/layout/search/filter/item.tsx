@@ -21,9 +21,9 @@ function PathFilterItem({ item }: { item: PathFilterItem }) {
       <DynamicTag
         href={createUrl(item.path, newParams)}
         className={clsx(
-          "w-full text-sm underline-offset-4 hover:underline dark:hover:text-neutral-100",
+          "w-full text-sm transition-colors hover:text-orange-400",
           {
-            "underline underline-offset-4": active,
+            "text-orange-400": active,
           },
         )}
       >
@@ -55,8 +55,8 @@ function SortFilterItem({ item }: { item: SortFilterItem }) {
       <DynamicTag
         prefetch={!active ? false : undefined}
         href={href}
-        className={clsx("w-full hover:underline hover:underline-offset-4", {
-          "underline underline-offset-4": active,
+        className={clsx("w-full transition-colors hover:text-orange-400", {
+          "text-orange-400": active,
         })}
       >
         {item.title}
