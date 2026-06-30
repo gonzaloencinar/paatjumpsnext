@@ -49,15 +49,17 @@ export function Hero() {
         {/* ── Copy ───────────────────────────────────────────────────── */}
         <div className="z-10 flex flex-col items-center md:col-span-6">
           <div className="flex max-w-xl flex-col items-start text-left">
-          <h1 className="text-5xl leading-[0.95] font-bold tracking-tight text-balance text-white sm:text-6xl lg:text-7xl">
-            Las mejores combas{" "}
-            <span className="text-orange-600">del mercado.</span>
+          <h1 className="text-4xl leading-[0.95] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
+            No todas las combas
+            <br />
+            <span className="text-orange-600">son iguales.</span>
           </h1>
 
-          <p className="mt-6 max-w-md text-lg text-white/70 text-pretty">
-            Cada cuerda, rodamiento y empuñadura nace de miles de horas saltando.
-            Velocidad, control y durabilidad de competición — pensadas por una
-            referente para principiantes y atletas.
+          <p className="mt-6 max-w-md text-lg text-white/90 text-pretty">
+            Paat Jumps nace de más de seis años de pasión por la comba. De
+            aprender,
+            mejorar y ayudar a miles de personas a descubrir este deporte. Cada
+            comba está montada a mano y cuidada hasta el último detalle.
           </p>
 
           {/* CTAs */}
@@ -92,29 +94,23 @@ export function Hero() {
           </dl>
           </div>
         </div>
+        </div>
+      </div>
 
-        {/* ── Paat (cutout, vertically centered) ─────────────────────── */}
-        <div className="relative z-0 hidden md:col-span-6 md:block">
-          <div className="relative mx-auto aspect-3/4 max-h-[70vh] w-full max-w-xl">
+      {/* ── Paat (cutout, pinned to the bottom — legs bleed under the marquee) ── */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 hidden md:block">
+        <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) justify-end px-4">
+          <div className="relative h-[92vh] w-1/2 max-w-3xl">
             {/* Glow halo behind her */}
             <div className="absolute inset-x-8 bottom-0 -z-10 h-[80%] rounded-[40%] bg-orange-600/30 blur-3xl" />
             {/* Plain <img> so a missing asset degrades silently instead of erroring */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/hero/paat.png"
+              src="/hero/paat.webp"
               alt="Paat Jumps, fundadora y referente del salto a la comba"
-              className="motion-safe:animate-[heroFloat_6s_ease-in-out_infinite] absolute inset-x-0 bottom-0 mx-auto h-full w-auto object-contain object-bottom drop-shadow-2xl"
-            />
-            {/* Optional handwritten signature overlay */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/hero/signature.png"
-              alt=""
-              aria-hidden
-              className="pointer-events-none absolute top-6 right-2 hidden h-16 w-auto opacity-80 lg:block"
+              className="absolute inset-x-0 bottom-0 mx-auto h-full w-auto object-contain object-bottom drop-shadow-2xl"
             />
           </div>
-        </div>
         </div>
       </div>
 
@@ -133,7 +129,7 @@ export function Hero() {
 }
 
 const MARQUEE_ITEMS = [
-  "Rodamientos de competición",
+  "Hechas a mano",
   "Cable de acero recubierto",
   "Empuñaduras ergonómicas",
   "Diseño español",
