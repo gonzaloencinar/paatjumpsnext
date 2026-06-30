@@ -1,0 +1,7 @@
+# secretos y artefactos locales de la herramienta de recoloreado
+.env
+.cache/
+
+# NOTA: las imágenes generadas van a tools/recolor/resultados/ y NO se ignoran a propósito,
+# para que se vean en el árbol del proyecto. (Son grandes: no las añadas a git si no quieres
+# commitearlas.)
