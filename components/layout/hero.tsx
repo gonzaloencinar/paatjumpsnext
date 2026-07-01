@@ -25,7 +25,7 @@ const STATS = [
 
 export function Hero() {
   return (
-    <section className="relative isolate flex h-[calc(100svh-76px)] w-full flex-col overflow-hidden bg-neutral-950">
+    <section className="relative isolate flex min-h-[calc(100svh-76px)] w-full flex-col overflow-hidden bg-neutral-950 md:h-[calc(100svh-76px)]">
       {/* ── Background video (optional) ──────────────────────────────── */}
       <video
         className="absolute inset-0 -z-20 h-full w-full object-cover opacity-30"
@@ -44,7 +44,20 @@ export function Hero() {
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950 via-neutral-950/70 to-neutral-950/40" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-neutral-950 via-neutral-950/60 to-transparent" />
 
-      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-1 items-center px-4">
+      {/* ── Paat (mobile only) — stands on the marquee just below so her legs aren't cut ── */}
+      <div className="relative flex justify-center md:hidden">
+        {/* Glow halo behind her */}
+        <div className="absolute inset-x-10 bottom-0 -z-10 h-[70%] rounded-[40%] bg-orange-600/30 blur-3xl" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/hero/paat.webp"
+          alt="Paat Jumps, fundadora y referente del salto a la comba"
+          className="h-[42vh] w-auto object-contain drop-shadow-2xl"
+        />
+      </div>
+
+      {/* On mobile the copy drops below the marquee (order-last); desktop keeps it centered. */}
+      <div className="order-last mx-auto flex w-full max-w-(--breakpoint-2xl) flex-1 items-center px-4 md:order-none">
         <div className="grid w-full grid-cols-1 items-center gap-8 md:grid-cols-12 md:gap-4">
         {/* ── Copy ───────────────────────────────────────────────────── */}
         <div className="z-10 flex flex-col items-center md:col-span-6">
@@ -69,15 +82,8 @@ export function Hero() {
               prefetch={true}
               className="group inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-base font-semibold text-white transition hover:bg-orange-500"
             >
-              Comprar combas
+              Elige la tuya
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/about"
-              prefetch={true}
-              className="inline-flex items-center justify-center rounded-full border border-white/20 px-7 py-3.5 text-base font-semibold text-white transition hover:border-orange-400 hover:text-orange-400"
-            >
-              Conoce a Paat
             </Link>
           </div>
 
@@ -115,7 +121,7 @@ export function Hero() {
       </div>
 
       {/* ── Scrolling marquee strip ──────────────────────────────────── */}
-      <div className="relative border-y border-white/10 bg-neutral-950/60 backdrop-blur">
+      <div className="relative mb-10 border-y border-white/10 bg-neutral-950/60 backdrop-blur md:mb-0">
         <div className="flex overflow-hidden">
           <div className="motion-safe:animate-[heroMarquee_30s_linear_infinite] flex shrink-0 items-center gap-10 py-3 pr-10 whitespace-nowrap">
             {Array.from({ length: 2 }).map((_, i) => (
@@ -129,12 +135,10 @@ export function Hero() {
 }
 
 const MARQUEE_ITEMS = [
-  "Hechas a mano",
-  "Cable de acero recubierto",
   "Empuñaduras ergonómicas",
-  "Diseño español",
+  "Hechas a mano en España",
   "Envío en 24/48h",
-  "Usadas por atletas",
+  "Usada por profesionales de la comba",
 ];
 
 function MarqueeRow(props: { "aria-hidden"?: boolean }) {

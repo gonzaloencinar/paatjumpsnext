@@ -5,7 +5,7 @@ import { Hero } from "components/layout/hero";
 
 export const metadata = {
   description:
-    "High-performance ecommerce store built with Next.js, Vercel, and Shopify.",
+    "Combas de saltar hechas a mano para atletas. Cable de acero recubierto y diseño duradero.",
   openGraph: {
     type: "website",
   },

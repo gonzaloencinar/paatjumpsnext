@@ -2,22 +2,25 @@ import Link from "next/link";
 
 import FooterMenu from "components/layout/footer-menu";
 import LogoIcon from "components/icons/logo";
-import { getMenu } from "lib/shopify";
 import { Suspense } from "react";
 
 const { COMPANY_NAME, SITE_NAME } = process.env;
 
+const footerMenu = [
+  { title: "Todas", path: "/search" },
+  { title: "PVC", path: "/search/combas-pvc" },
+  { title: "Segmentadas", path: "/search/combas-segmentadas" },
+];
+
 export default async function Footer() {
-  const currentYear = new Date().getFullYear();
-  const copyrightDate = 2023 + (currentYear > 2023 ? `-${currentYear}` : "");
+  const copyrightDate = new Date().getFullYear();
   const skeleton =
     "w-full h-6 animate-pulse rounded-sm bg-neutral-200 dark:bg-neutral-700";
-  const menu = await getMenu("next-js-frontend-footer-menu");
   const copyrightName = COMPANY_NAME || SITE_NAME || "";
 
   return (
-    <footer className="text-sm text-white/60">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 border-t border-neutral-200 px-6 py-12 text-sm md:flex-row md:gap-12 md:px-4 min-[1320px]:px-0 dark:border-neutral-700">
+    <footer className="mt-16 bg-orange-600 text-sm text-white/80 md:mt-0">
+      <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col gap-6 px-4 py-12 text-sm md:flex-row md:gap-12">
         <div>
           <Link
             className="flex items-center gap-2 text-black md:pt-1 dark:text-white"
@@ -33,43 +36,20 @@ export default async function Footer() {
               <div className={skeleton} />
               <div className={skeleton} />
               <div className={skeleton} />
-              <div className={skeleton} />
-              <div className={skeleton} />
-              <div className={skeleton} />
             </div>
           }
         >
-          <FooterMenu menu={menu} />
+          <FooterMenu menu={footerMenu} />
         </Suspense>
-        <div className="md:ml-auto">
-          <a
-            className="flex h-8 w-max flex-none items-center justify-center rounded-md border border-neutral-200 bg-white text-xs text-black dark:border-neutral-700 dark:bg-black dark:text-white"
-            aria-label="Deploy on Vercel"
-            href="https://vercel.com/templates/next.js/nextjs-commerce"
-          >
-            <span className="px-3">▲</span>
-            <hr className="h-full border-r border-neutral-200 dark:border-neutral-700" />
-            <span className="px-3">Deploy</span>
-          </a>
-        </div>
       </div>
-      <div className="border-t border-neutral-200 py-6 text-sm dark:border-neutral-700">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-1 px-4 md:flex-row md:gap-0 md:px-4 min-[1320px]:px-0">
+      <div className="border-t border-white/20 py-6 text-sm">
+        <div className="mx-auto flex w-full max-w-(--breakpoint-2xl) flex-col items-center gap-1 px-4 md:flex-row md:gap-0">
           <p>
             &copy; {copyrightDate} {copyrightName}
             {copyrightName.length && !copyrightName.endsWith(".")
               ? "."
               : ""}{" "}
-            All rights reserved.
-          </p>
-          <hr className="mx-4 hidden h-4 w-[1px] border-l border-neutral-400 md:inline-block" />
-          <p>
-            <a href="https://github.com/vercel/commerce">View the source</a>
-          </p>
-          <p className="md:ml-auto">
-            <a href="https://vercel.com" className="text-black dark:text-white">
-              Created by ▲ Vercel
-            </a>
+            Todos los derechos reservados.
           </p>
         </div>
       </div>

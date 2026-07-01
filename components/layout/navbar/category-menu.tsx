@@ -83,7 +83,7 @@ export default function CategoryMenu({
           open ? "text-orange-400" : "text-white hover:text-orange-400",
         )}
       >
-        Categorías
+        Ver combas
         <ChevronDownIcon
           className={clsx(
             "h-4 w-4 transition-transform duration-200",

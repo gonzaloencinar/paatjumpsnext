@@ -48,7 +48,7 @@ export function Gallery({
             <div className="mx-auto flex h-11 items-center rounded-full border border-white bg-neutral-50/80 text-white/70 backdrop-blur-sm dark:border-black dark:bg-neutral-900/80">
               <button
                 formAction={() => updateImage(previousImageIndex.toString())}
-                aria-label="Previous product image"
+                aria-label="Imagen anterior del producto"
                 className={buttonClassName}
               >
                 <ArrowLeftIcon className="h-5" />
@@ -56,7 +56,7 @@ export function Gallery({
               <div className="mx-1 h-6 w-px bg-white/30"></div>
               <button
                 formAction={() => updateImage(nextImageIndex.toString())}
-                aria-label="Next product image"
+                aria-label="Siguiente imagen del producto"
                 className={buttonClassName}
               >
                 <ArrowRightIcon className="h-5" />
@@ -75,7 +75,7 @@ export function Gallery({
               <li key={image.src} className="h-20 w-20">
                 <button
                   formAction={() => updateImage(index.toString())}
-                  aria-label="Select product image"
+                  aria-label="Seleccionar imagen del producto"
                   className="h-full w-full"
                 >
                   <GridTileImage

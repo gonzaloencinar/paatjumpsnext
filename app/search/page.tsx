@@ -7,8 +7,8 @@ import { searchParamsToProductFilters } from "lib/search/filtering";
 import { getSearchWithFilters } from "lib/shopify";
 
 export const metadata = {
-  title: "Search",
-  description: "Search for products in the store.",
+  title: "Buscar",
+  description: "Busca productos en la tienda.",
 };
 
 // `search` only supports RELEVANCE and PRICE sorting.

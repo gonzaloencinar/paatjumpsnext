@@ -1,3 +1,4 @@
+import { QuickAddButton } from "components/cart/quick-add-button";
 import Grid from "components/grid";
 import { GridTileImage } from "components/grid/tile";
 import { Product } from "lib/shopify/types";
@@ -11,7 +12,7 @@ export default function ProductGridItems({
   return (
     <>
       {products.map((product) => (
-        <Grid.Item key={product.handle} className="animate-fadeIn">
+        <Grid.Item key={product.handle} className="relative animate-fadeIn">
           <Link
             className="relative inline-block h-full w-full"
             href={`/product/${product.handle}`}
@@ -29,6 +30,7 @@ export default function ProductGridItems({
               sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
             />
           </Link>
+          <QuickAddButton product={product} />
         </Grid.Item>
       ))}
     </>

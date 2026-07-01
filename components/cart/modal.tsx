@@ -15,6 +15,10 @@ import { createCartAndSetCookie, redirectToCheckout } from "./actions";
 import { useCart } from "./cart-context";
 import { DeleteItemButton } from "./delete-item-button";
 import { EditItemQuantityButton } from "./edit-item-quantity-button";
+import {
+  FREE_SHIPPING_THRESHOLD,
+  FreeShippingProgress,
+} from "./free-shipping-progress";
 import OpenCart from "./open-cart";
 
 type MerchandiseSearchParams = {
@@ -49,7 +53,7 @@ export default function CartModal() {
 
   return (
     <>
-      <button aria-label="Open cart" onClick={openCart}>
+      <button aria-label="Abrir carrito" onClick={openCart}>
         <OpenCart quantity={cart?.totalQuantity} />
       </button>
       <Transition show={isOpen}>
@@ -76,8 +80,8 @@ export default function CartModal() {
           >
             <Dialog.Panel className="fixed bottom-0 right-0 top-0 flex h-full w-full flex-col border-l border-neutral-200 bg-white/80 p-6 text-black backdrop-blur-xl md:w-[390px] dark:border-neutral-700 dark:bg-black/80 dark:text-white">
               <div className="flex items-center justify-between">
-                <p className="text-lg font-semibold">My Cart</p>
-                <button aria-label="Close cart" onClick={closeCart}>
+                <p className="text-lg font-semibold">Mi carrito</p>
+                <button aria-label="Cerrar carrito" onClick={closeCart}>
                   <CloseCart />
                 </button>
               </div>
@@ -86,7 +90,7 @@ export default function CartModal() {
                 <div className="mt-20 flex w-full flex-col items-center justify-center overflow-hidden">
                   <ShoppingCartIcon className="h-16" />
                   <p className="mt-6 text-center text-2xl font-bold">
-                    Your cart is empty.
+                    Tu carrito está vacío.
                   </p>
                 </div>
               ) : (
@@ -193,19 +197,31 @@ export default function CartModal() {
                         );
                       })}
                   </ul>
+                  <FreeShippingProgress
+                    subtotal={Number(cart.cost.subtotalAmount.amount)}
+                    currencyCode={cart.cost.subtotalAmount.currencyCode}
+                    onContinue={closeCart}
+                  />
                   <div className="py-4 text-sm text-white/60">
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 dark:border-neutral-700">
-                      <p>Taxes</p>
-                      <Price
-                        className="text-right text-base text-black dark:text-white"
-                        amount={cart.cost.totalTaxAmount.amount}
-                        currencyCode={cart.cost.totalTaxAmount.currencyCode}
-                      />
+                      <p>Envío</p>
+                      {Number(cart.cost.subtotalAmount.amount) >=
+                      FREE_SHIPPING_THRESHOLD ? (
+                        <p className="text-right font-medium text-orange-500">
+                          Gratis*
+                        </p>
+                      ) : (
+                        <p className="text-right">
+                          Se calcula al finalizar la compra
+                        </p>
+                      )}
                     </div>
-                    <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 pt-1 dark:border-neutral-700">
-                      <p>Shipping</p>
-                      <p className="text-right">Calculated at checkout</p>
-                    </div>
+                    {Number(cart.cost.subtotalAmount.amount) >=
+                    FREE_SHIPPING_THRESHOLD ? (
+                      <p className="mb-3 text-right text-xs text-neutral-500">
+                        *Envío gratis a Península y Baleares
+                      </p>
+                    ) : null}
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 pt-1 dark:border-neutral-700">
                       <p>Total</p>
                       <Price
@@ -250,7 +266,7 @@ function CheckoutButton() {
       type="submit"
       disabled={pending}
     >
-      {pending ? <LoadingDots className="bg-white" /> : "Proceed to Checkout"}
+      {pending ? <LoadingDots className="bg-white" /> : "Finalizar compra"}
     </button>
   );
 }

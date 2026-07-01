@@ -29,21 +29,21 @@ export async function Navbar() {
     }));
 
   return (
-    <nav className="relative flex items-center justify-between p-4 lg:px-6">
+    <nav className="relative mx-auto flex max-w-(--breakpoint-2xl) items-center justify-between p-4">
       <div className="block flex-none md:hidden">
         <Suspense fallback={null}>
           <MobileMenu categories={categories} />
         </Suspense>
       </div>
       <div className="flex w-full items-center">
-        <div className="flex w-full md:w-1/3">
+        <div className="flex w-full items-center md:w-1/3 md:gap-6">
           <Link
             href="/"
             prefetch={true}
-            className="mr-2 flex w-full items-center justify-center md:w-auto lg:mr-6"
+            className="flex w-full items-center justify-center md:w-auto"
             aria-label={SITE_NAME}
           >
-            <LogoIcon className="h-7 w-auto" />
+            <LogoIcon className="h-10 w-auto" />
           </Link>
           {categories.length ? (
             <ul className="hidden gap-6 text-sm md:flex md:items-center">

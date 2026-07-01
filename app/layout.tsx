@@ -35,8 +35,8 @@ export default async function RootLayout({
   const cart = getCart();
 
   return (
-    <html lang="en" className={cn("dark", GeistSans.variable, "font-sans", geist.variable)}>
-      <body className="bg-neutral-50 text-black selection:bg-teal-300 dark:bg-neutral-900 dark:text-white dark:selection:bg-pink-500 dark:selection:text-white">
+    <html lang="es" className={cn("dark", GeistSans.variable, "font-sans", geist.variable)}>
+      <body className="bg-neutral-50 text-black selection:bg-teal-300 dark:bg-neutral-950 dark:text-white dark:selection:bg-pink-500 dark:selection:text-white">
         <CartProvider cartPromise={cart}>
           <Navbar />
           <main>
