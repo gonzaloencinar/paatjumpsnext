@@ -41,3 +41,10 @@ next-env.d.ts
 # tool scratch / cache (regenerable)
 tools/**/.tmp/
 tools/**/.cache/
+
+# large product-image working assets — NOT served by the app.
+# Kept local; consumed by tools/ (reframe reads/writes, shopify-create uploads to Shopify).
+/public/combasBeaded-1:1/
+/public/combasPVC-16:9/
+/public/combasPVC-1:1/
+/tools/recolor/resultados/
