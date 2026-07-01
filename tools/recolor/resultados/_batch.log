@@ -1,194 +1,0 @@
-▶ Batch de 8 colores · 2K · paralelismo 4
-[magenta #B02F62] 
-[magenta #B02F62] ● Producto: comba con cuentas Paat Jumps
-[magenta #B02F62] ● Color   : magenta #B02F62  (mono)
-[magenta #B02F62] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[magenta #B02F62] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[magenta #B02F62] 
-[magenta #B02F62] ── prompt operativo (image-to-image) ──
-[magenta #B02F62] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: magenta #B02F62 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[magenta #B02F62] 
-[magenta #B02F62] Subiendo referencias…
-[magenta #B02F62]   • fotoproductoprincipal: comprimida → 317 KB
-[magenta #B02F62]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[magenta #B02F62]   • fotoproductosecundaria: comprimida → 240 KB
-[magenta #B02F62]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[magenta #B02F62] 
-[magenta #B02F62] ► Generando fotoproductoprincipal …
-[magenta #B02F62]    taskId=b24845a727398cc4ab0740b32a93a04a
-[magenta #B02F62]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/magenta-b02f62/fotoproductoprincipal.png
-[magenta #B02F62] 
-[magenta #B02F62] ► Generando fotoproductosecundaria …
-[magenta #B02F62]    taskId=f921f5ae0792c936d52110546fb44c1f
-[magenta #B02F62]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/magenta-b02f62/fotoproductosecundaria.png
-[magenta #B02F62] 
-[magenta #B02F62] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/magenta-b02f62/
-[bright orange #F45F0F] 
-[bright orange #F45F0F] ● Producto: comba con cuentas Paat Jumps
-[bright orange #F45F0F] ● Color   : bright orange #F45F0F  (mono)
-[bright orange #F45F0F] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[bright orange #F45F0F] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[bright orange #F45F0F] 
-[bright orange #F45F0F] ── prompt operativo (image-to-image) ──
-[bright orange #F45F0F] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: bright orange #F45F0F (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[bright orange #F45F0F] 
-[bright orange #F45F0F] Subiendo referencias…
-[bright orange #F45F0F]   • fotoproductoprincipal: comprimida → 317 KB
-[bright orange #F45F0F]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[bright orange #F45F0F]   • fotoproductosecundaria: comprimida → 240 KB
-[bright orange #F45F0F]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[bright orange #F45F0F] 
-[bright orange #F45F0F] ► Generando fotoproductoprincipal …
-[bright orange #F45F0F]    taskId=0facf00e024905fc31b386d59f7ec504
-[bright orange #F45F0F]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/bright-orange-f45f0f/fotoproductoprincipal.png
-[bright orange #F45F0F] 
-[bright orange #F45F0F] ► Generando fotoproductosecundaria …
-[bright orange #F45F0F]    taskId=5229fbc5afa9d0040a27e22669f97d68
-[bright orange #F45F0F]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/bright-orange-f45f0f/fotoproductosecundaria.png
-[bright orange #F45F0F] 
-[bright orange #F45F0F] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/bright-orange-f45f0f/
-[black #181819] 
-[black #181819] ● Producto: comba con cuentas Paat Jumps
-[black #181819] ● Color   : black #181819  (mono)
-[black #181819] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[black #181819] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[black #181819] 
-[black #181819] ── prompt operativo (image-to-image) ──
-[black #181819] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: black #181819 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[black #181819] 
-[black #181819] Subiendo referencias…
-[black #181819]   • fotoproductoprincipal: comprimida → 317 KB
-[black #181819]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[black #181819]   • fotoproductosecundaria: comprimida → 240 KB
-[black #181819]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[black #181819] 
-[black #181819] ► Generando fotoproductoprincipal …
-[black #181819]    taskId=6e1b9206a1f4f1040438b3157803be3c
-[black #181819]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/black-181819/fotoproductoprincipal.png
-[black #181819] 
-[black #181819] ► Generando fotoproductosecundaria …
-[black #181819]    taskId=80ce7e802b53f79f2d1f8841af08cb86
-[black #181819]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/black-181819/fotoproductosecundaria.png
-[black #181819] 
-[black #181819] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/black-181819/
-[emerald green #2A6447] 
-[emerald green #2A6447] ● Producto: comba con cuentas Paat Jumps
-[emerald green #2A6447] ● Color   : emerald green #2A6447  (mono)
-[emerald green #2A6447] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[emerald green #2A6447] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[emerald green #2A6447] 
-[emerald green #2A6447] ── prompt operativo (image-to-image) ──
-[emerald green #2A6447] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: emerald green #2A6447 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[emerald green #2A6447] 
-[emerald green #2A6447] Subiendo referencias…
-[emerald green #2A6447]   • fotoproductoprincipal: comprimida → 317 KB
-[emerald green #2A6447]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[emerald green #2A6447]   • fotoproductosecundaria: comprimida → 240 KB
-[emerald green #2A6447]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[emerald green #2A6447] 
-[emerald green #2A6447] ► Generando fotoproductoprincipal …
-[emerald green #2A6447]    taskId=28978ae0540965fb7de9a145d17cd70e
-[emerald green #2A6447]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/emerald-green-2a6447/fotoproductoprincipal.png
-[emerald green #2A6447] 
-[emerald green #2A6447] ► Generando fotoproductosecundaria …
-[emerald green #2A6447]    taskId=040cde369f976cf24f3eca3e7ae3cf02
-[emerald green #2A6447]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/emerald-green-2a6447/fotoproductosecundaria.png
-[emerald green #2A6447] 
-[emerald green #2A6447] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/emerald-green-2a6447/
-[chartreuse green #97A947] 
-[chartreuse green #97A947] ● Producto: comba con cuentas Paat Jumps
-[chartreuse green #97A947] ● Color   : chartreuse green #97A947  (mono)
-[chartreuse green #97A947] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[chartreuse green #97A947] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[chartreuse green #97A947] 
-[chartreuse green #97A947] ── prompt operativo (image-to-image) ──
-[chartreuse green #97A947] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: chartreuse green #97A947 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[chartreuse green #97A947] 
-[chartreuse green #97A947] Subiendo referencias…
-[chartreuse green #97A947]   • fotoproductoprincipal: comprimida → 317 KB
-[chartreuse green #97A947]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[chartreuse green #97A947]   • fotoproductosecundaria: comprimida → 240 KB
-[chartreuse green #97A947]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[chartreuse green #97A947] 
-[chartreuse green #97A947] ► Generando fotoproductoprincipal …
-[chartreuse green #97A947]    taskId=adc06e1149792bf6304b49d5e0e5d8d5
-[chartreuse green #97A947]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/chartreuse-green-97a947/fotoproductoprincipal.png
-[chartreuse green #97A947] 
-[chartreuse green #97A947] ► Generando fotoproductosecundaria …
-[chartreuse green #97A947]    taskId=31abe3e962942e032d835f8fc8b0bf78
-[chartreuse green #97A947]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/chartreuse-green-97a947/fotoproductosecundaria.png
-[chartreuse green #97A947] 
-[chartreuse green #97A947] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/chartreuse-green-97a947/
-[grass green #4CA227] 
-[grass green #4CA227] ● Producto: comba con cuentas Paat Jumps
-[grass green #4CA227] ● Color   : grass green #4CA227  (mono)
-[grass green #4CA227] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[grass green #4CA227] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[grass green #4CA227] 
-[grass green #4CA227] ── prompt operativo (image-to-image) ──
-[grass green #4CA227] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: grass green #4CA227 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[grass green #4CA227] 
-[grass green #4CA227] Subiendo referencias…
-[grass green #4CA227]   • fotoproductoprincipal: comprimida → 317 KB
-[grass green #4CA227]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[grass green #4CA227]   • fotoproductosecundaria: comprimida → 240 KB
-[grass green #4CA227]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[grass green #4CA227] 
-[grass green #4CA227] ► Generando fotoproductoprincipal …
-[grass green #4CA227]    taskId=c12e29de679bb847bd3442e4818c1365
-[grass green #4CA227]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/grass-green-4ca227/fotoproductoprincipal.png
-[grass green #4CA227] 
-[grass green #4CA227] ► Generando fotoproductosecundaria …
-[grass green #4CA227]    taskId=459b0fdbb431a1dc6afd2f8e06b5d956
-[grass green #4CA227]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/grass-green-4ca227/fotoproductosecundaria.png
-[grass green #4CA227] 
-[grass green #4CA227] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/grass-green-4ca227/
-[violet purple #4F3A92] 
-[violet purple #4F3A92] ● Producto: comba con cuentas Paat Jumps
-[violet purple #4F3A92] ● Color   : violet purple #4F3A92  (mono)
-[violet purple #4F3A92] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[violet purple #4F3A92] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[violet purple #4F3A92] 
-[violet purple #4F3A92] ── prompt operativo (image-to-image) ──
-[violet purple #4F3A92] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: violet purple #4F3A92 (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[violet purple #4F3A92] 
-[violet purple #4F3A92] Subiendo referencias…
-[violet purple #4F3A92]   • fotoproductoprincipal: comprimida → 317 KB
-[violet purple #4F3A92]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[violet purple #4F3A92]   • fotoproductosecundaria: comprimida → 240 KB
-[violet purple #4F3A92]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[violet purple #4F3A92] 
-[violet purple #4F3A92] ► Generando fotoproductoprincipal …
-[violet purple #4F3A92]    taskId=471d7ea9361f81662772df4cbdda2bf2
-[violet purple #4F3A92]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/violet-purple-4f3a92/fotoproductoprincipal.png
-[violet purple #4F3A92] 
-[violet purple #4F3A92] ► Generando fotoproductosecundaria …
-[violet purple #4F3A92]    taskId=7acbfcb46e42abe6561203b72a65fe62
-[violet purple #4F3A92]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/violet-purple-4f3a92/fotoproductosecundaria.png
-[violet purple #4F3A92] 
-[violet purple #4F3A92] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/violet-purple-4f3a92/
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] ● Producto: comba con cuentas Paat Jumps
-[cobalt blue #043E9E] ● Color   : cobalt blue #043E9E  (mono)
-[cobalt blue #043E9E] ● Estilos : Principal · packshot cenital  |  Secundaria · macro de detalle
-[cobalt blue #043E9E] ● Salida  : 2K 1:1 · 1 variante(s)/estilo
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] ── prompt operativo (image-to-image) ──
-[cobalt blue #043E9E] Edit this product photo. The ONLY change: recolour ALL the cylindrical beads to a single uniform colour: cobalt blue #043E9E (every bead exactly the same colour). Keep the same glossy plastic finish and specular highlights on every bead. Keep the composition, framing, the two matte-black handles, the white 'Paat Jumps' cursive script logos, the black cable, the dark background, the lighting, reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles, the logo or any text. Photorealistic result, identical to the original except for the bead colour.
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] Subiendo referencias…
-[cobalt blue #043E9E]   • fotoproductoprincipal: comprimida → 317 KB
-[cobalt blue #043E9E]   • fotoproductoprincipal: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoPrincipal.8965de7bdda3.jpg
-[cobalt blue #043E9E]   • fotoproductosecundaria: comprimida → 240 KB
-[cobalt blue #043E9E]   • fotoproductosecundaria: https://tempfile.redpandaai.co/kieai/662289/paatjumps/recolor-refs/fotoProductoSecundaria.af6d7594bfb0.jpg
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] ► Generando fotoproductoprincipal …
-[cobalt blue #043E9E]    taskId=28cf20adfc63d6c282b1cf5f10d4addf
-[cobalt blue #043E9E]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/cobalt-blue-043e9e/fotoproductoprincipal.png
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] ► Generando fotoproductosecundaria …
-[cobalt blue #043E9E]    taskId=1a7a5f3387c95f22df1180af2b3611d2
-[cobalt blue #043E9E]    …waiting   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   …generating   ✓ tools/recolor/resultados/cobalt-blue-043e9e/fotoproductosecundaria.png
-[cobalt blue #043E9E] 
-[cobalt blue #043E9E] ✅ Listo. 2 imagen(es) en tools/recolor/resultados/cobalt-blue-043e9e/
-✅ BATCH DONE — 11 carpetas de color
