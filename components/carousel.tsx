@@ -1,3 +1,4 @@
+import { ArrowRightIcon } from "@heroicons/react/24/outline";
 import { getCollectionProducts } from "lib/shopify";
 import Link from "next/link";
 import { GridTileImage } from "./grid/tile";
@@ -15,10 +16,18 @@ export async function Carousel() {
 
   return (
     <section className="w-full pt-12 pb-6 md:pt-16">
-      <div className="mx-auto w-full max-w-(--breakpoint-2xl) px-4">
-        <h2 className="mb-8 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+      <div className="mx-auto mb-8 flex w-full max-w-(--breakpoint-2xl) items-baseline justify-between gap-4 px-4">
+        <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
           Elige tu <span className="text-orange-600">comba.</span>
         </h2>
+        <Link
+          href="/search"
+          prefetch={true}
+          className="group inline-flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-white transition hover:text-orange-400"
+        >
+          Ver todas
+          <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </Link>
       </div>
       <div className="w-full overflow-x-auto">
         <ul className="flex gap-4 pr-4 motion-safe:animate-carousel">

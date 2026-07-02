@@ -106,6 +106,8 @@ export default async function ProductPage(props: {
         <RelatedProducts id={product.id} />
       </div>
       <Footer />
+      {/* Deja sitio a la barra sticky de "Añadir al carrito" en móvil */}
+      <div aria-hidden className="h-20 md:hidden" />
     </>
   );
 }

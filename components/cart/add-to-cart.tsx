@@ -57,8 +57,10 @@ function SubmitButton({
   );
 }
 
-export function AddToCart({ product }: { product: Product }) {
-  const { variants, availableForSale } = product;
+// Variant resolution + optimistic add + server action, shared by every
+// "add to cart" UI (main button, mobile sticky bar).
+export function useAddToCartForm(product: Product) {
+  const { variants } = product;
   const { addCartItem } = useCart();
   const searchParams = useSearchParams();
   const [message, formAction] = useActionState(addItem, null);
@@ -75,15 +77,23 @@ export function AddToCart({ product }: { product: Product }) {
     (variant) => variant.id === selectedVariantId,
   )!;
 
+  return {
+    selectedVariantId,
+    message,
+    action: async () => {
+      addCartItem(finalVariant, product);
+      addItemAction();
+    },
+  };
+}
+
+export function AddToCart({ product }: { product: Product }) {
+  const { selectedVariantId, message, action } = useAddToCartForm(product);
+
   return (
-    <form
-      action={async () => {
-        addCartItem(finalVariant, product);
-        addItemAction();
-      }}
-    >
+    <form action={action}>
       <SubmitButton
-        availableForSale={availableForSale}
+        availableForSale={product.availableForSale}
         selectedVariantId={selectedVariantId}
       />
       <p aria-live="polite" className="sr-only" role="status">
