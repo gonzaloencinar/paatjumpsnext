@@ -4,17 +4,15 @@ import Link from "next/link";
 /**
  * Home hero. Personal-brand led: Paat is the protagonist.
  *
- * ASSETS (drop into /public/hero/, all optional — the section degrades gracefully):
- *  - paat.png        Cutout of Paat with NO background (transparent PNG/WebP),
- *                    ideally mid-jump or in a confident pose, shot vertically so
- *                    she can bleed off the bottom edge. ~1200x1600px+.
- *  - loop.mp4        Short muted loop (rope spinning / training b-roll) for the
- *                    background. Keep it dark/low-contrast so text stays legible.
- *                    Add loop.webm too for better compression if you can.
- *  - poster.jpg      Fallback still shown before/instead of the video.
- *  - signature.png   Optional white handwritten "Paat" signature (transparent).
+ * ASSETS (in /public/hero/):
+ *  - paat.webp       Cutout of Paat with NO background (transparent WebP),
+ *                    shot vertically so she can bleed off the bottom edge.
  *
- * No asset? Each layer just isn't rendered — the gradient + glow still look good.
+ * If you add a background video later (loop.mp4/loop.webm + poster.jpg in
+ * /public/hero/), render it as an absolutely-positioned `-z-20` layer with
+ * `autoPlay muted loop playsInline` and low opacity so text stays legible.
+ * Only reference files that actually exist — a <video>/poster pointing at
+ * missing assets fires 404 requests on every page view.
  */
 
 const STATS = [
@@ -26,19 +24,6 @@ const STATS = [
 export function Hero() {
   return (
     <section className="relative isolate flex min-h-[calc(100svh-76px)] w-full flex-col overflow-hidden bg-neutral-950 md:h-[calc(100svh-76px)]">
-      {/* ── Background video (optional) ──────────────────────────────── */}
-      <video
-        className="absolute inset-0 -z-20 h-full w-full object-cover opacity-30"
-        autoPlay
-        muted
-        loop
-        playsInline
-        poster="/hero/poster.jpg"
-      >
-        <source src="/hero/loop.webm" type="video/webm" />
-        <source src="/hero/loop.mp4" type="video/mp4" />
-      </video>
-
       {/* ── Ambient color + vignette ─────────────────────────────────── */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(120%_80%_at_85%_20%,rgba(234,88,12,0.28),transparent_55%)]" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950 via-neutral-950/70 to-neutral-950/40" />
@@ -52,6 +37,7 @@ export function Hero() {
         <img
           src="/hero/paat.webp"
           alt="Paat Jumps, fundadora y referente del salto a la comba"
+          fetchPriority="high"
           className="h-[42vh] w-auto object-contain drop-shadow-2xl"
         />
       </div>
@@ -59,47 +45,47 @@ export function Hero() {
       {/* On mobile the copy drops below the marquee (order-last); desktop keeps it centered. */}
       <div className="order-last mx-auto flex w-full max-w-(--breakpoint-2xl) flex-1 items-center px-4 md:order-none">
         <div className="grid w-full grid-cols-1 items-center gap-8 md:grid-cols-12 md:gap-4">
-        {/* ── Copy ───────────────────────────────────────────────────── */}
-        <div className="z-10 flex flex-col items-center md:col-span-6">
-          <div className="flex max-w-xl flex-col items-start text-left">
-          <h1 className="text-4xl leading-[0.95] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-            No todas las combas
-            <br />
-            <span className="text-orange-600">son iguales.</span>
-          </h1>
+          {/* ── Copy ───────────────────────────────────────────────────── */}
+          <div className="z-10 flex flex-col items-center md:col-span-6">
+            <div className="flex max-w-xl flex-col items-start text-left">
+              <h1 className="text-4xl leading-[0.95] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
+                No todas las combas
+                <br />
+                <span className="text-orange-600">son iguales.</span>
+              </h1>
 
-          <p className="mt-6 max-w-md text-lg text-white/90 text-pretty">
-            Paat Jumps nace de más de seis años de pasión por la comba. De
-            aprender,
-            mejorar y ayudar a miles de personas a descubrir este deporte. Cada
-            comba está montada a mano y cuidada hasta el último detalle.
-          </p>
+              <p className="mt-6 max-w-md text-lg text-white/90 text-pretty">
+                Paat Jumps nace de más de seis años de pasión por la comba. De
+                aprender, mejorar y ayudar a miles de personas a descubrir este
+                deporte. Cada comba está montada a mano y cuidada hasta el
+                último detalle.
+              </p>
 
-          {/* CTAs */}
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link
-              href="/search"
-              prefetch={true}
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-base font-semibold text-white transition hover:bg-orange-500"
-            >
-              Elige la tuya
-              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </div>
-
-          {/* Stats / social proof */}
-          <dl className="mt-12 flex items-center justify-start gap-8 md:mb-14">
-            {STATS.map((s) => (
-              <div key={s.label} className="flex flex-col">
-                <dt className="text-2xl font-bold text-white">{s.value}</dt>
-                <dd className="text-xs tracking-wide text-white/50 uppercase">
-                  {s.label}
-                </dd>
+              {/* CTAs */}
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Link
+                  href="/search"
+                  prefetch={true}
+                  className="group inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-base font-semibold text-white transition hover:bg-orange-500"
+                >
+                  Elige la tuya
+                  <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
               </div>
-            ))}
-          </dl>
+
+              {/* Stats / social proof — dt is the label, dd the value; visual order flipped with flex-col-reverse */}
+              <dl className="mt-12 flex items-center justify-start gap-8 md:mb-14">
+                {STATS.map((s) => (
+                  <div key={s.label} className="flex flex-col-reverse">
+                    <dt className="text-xs tracking-wide text-white/50 uppercase">
+                      {s.label}
+                    </dt>
+                    <dd className="text-2xl font-bold text-white">{s.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           </div>
-        </div>
         </div>
       </div>
 

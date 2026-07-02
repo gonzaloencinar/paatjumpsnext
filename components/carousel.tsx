@@ -14,32 +14,44 @@ export async function Carousel() {
   const carouselProducts = [...products, ...products, ...products];
 
   return (
-    <div className="w-full overflow-x-auto pb-6 pt-1">
-      <ul className="flex animate-carousel gap-4">
-        {carouselProducts.map((product, i) => (
-          <li
-            key={`${product.handle}${i}`}
-            className="relative aspect-square h-[30vh] max-h-[275px] w-2/3 max-w-[475px] flex-none md:w-1/3"
-          >
-            <Link
-              href={`/product/${product.handle}`}
-              className="relative h-full w-full"
+    <section className="w-full pt-12 pb-6 md:pt-16">
+      <div className="mx-auto w-full max-w-(--breakpoint-2xl) px-4">
+        <h2 className="mb-8 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          Elige tu <span className="text-orange-600">comba.</span>
+        </h2>
+      </div>
+      <div className="w-full overflow-x-auto">
+        <ul className="flex gap-4 pr-4 motion-safe:animate-carousel">
+          {carouselProducts.map((product, i) => (
+            <li
+              key={`${product.handle}${i}`}
+              // Copies 2 and 3 only exist for the infinite scroll effect — hide
+              // them from the accessibility tree and the tab order.
+              aria-hidden={i >= products.length || undefined}
+              className="relative aspect-square h-[30vh] max-h-[275px] w-2/3 max-w-[475px] flex-none md:w-1/3"
             >
-              <GridTileImage
-                alt={product.title}
-                label={{
-                  title: product.title,
-                  amount: product.priceRange.maxVariantPrice.amount,
-                  currencyCode: product.priceRange.maxVariantPrice.currencyCode,
-                }}
-                src={product.featuredImage?.url}
-                fill
-                sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
-              />
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+              <Link
+                href={`/product/${product.handle}`}
+                className="relative block h-full w-full"
+                tabIndex={i >= products.length ? -1 : undefined}
+              >
+                <GridTileImage
+                  alt={product.title}
+                  label={{
+                    title: product.title,
+                    amount: product.priceRange.maxVariantPrice.amount,
+                    currencyCode:
+                      product.priceRange.maxVariantPrice.currencyCode,
+                  }}
+                  src={product.featuredImage?.url}
+                  fill
+                  sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }

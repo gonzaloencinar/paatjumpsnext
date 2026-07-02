@@ -38,14 +38,18 @@ html {
   }
 }
 
-/* Hero animations */
-@keyframes heroFloat {
-  0%,
-  100% {
-    transform: translateY(0);
+/* Homepage carousel: products are rendered 3x, so shifting one third of the
+   track (one full copy, pr on the track matches the item gap) loops seamlessly. */
+@theme {
+  --animate-carousel: carousel 60s linear infinite;
+}
+
+@keyframes carousel {
+  from {
+    transform: translateX(0);
   }
-  50% {
-    transform: translateY(-12px);
+  to {
+    transform: translateX(calc(-100% / 3));
   }
 }
 
