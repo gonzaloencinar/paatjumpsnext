@@ -28,7 +28,7 @@ export async function Carousel() {
               // Copies 2 and 3 only exist for the infinite scroll effect — hide
               // them from the accessibility tree and the tab order.
               aria-hidden={i >= products.length || undefined}
-              className="relative aspect-square h-[30vh] max-h-[275px] w-2/3 max-w-[475px] flex-none md:w-1/3"
+              className="relative aspect-square w-2/3 max-w-[350px] flex-none md:w-1/3"
             >
               <Link
                 href={`/product/${product.handle}`}
