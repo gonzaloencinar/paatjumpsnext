@@ -1,4 +1,5 @@
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
+import { QuickAddButton } from "components/cart/quick-add-button";
 import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getCollectionProducts } from "lib/shopify";
@@ -67,6 +68,10 @@ export async function Carousel({
                   sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
                 />
               </Link>
+              {/* Solo en las copias reales: las duplicadas del loop son aria-hidden */}
+              {i < products.length ? (
+                <QuickAddButton product={product} />
+              ) : null}
             </li>
           ))}
         </ul>

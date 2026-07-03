@@ -1,14 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { XIcon } from "lucide-react";
 import { useDictionary } from "components/i18n/locale-context";
+import { fill } from "lib/i18n/dictionaries";
 
 // Barra sticky de captación del lanzamiento (plan §7.1).
 // Estética de marca: naranja-600 pleno con texto blanco, sin grises.
-// Estados en localStorage: dismissed (X) / subscribed (alta completada).
-
-const STORAGE_KEY = "pj:announcement-bar";
+// Aparece SIEMPRE (sin cookie de "ya rellenado"): un email repetido no la
+// oculta, sino que reenvía el mismo código por si acaso fue a spam. La X solo
+// la cierra durante la sesión (vuelve a salir al recargar).
 
 type Status = "idle" | "sending" | "success" | "error";
 
@@ -20,21 +21,12 @@ export function AnnouncementBar({
   percentage: number;
 }) {
   const t = useDictionary();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
+  const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) setVisible(true);
-  }, []);
-
   if (!visible) return null;
-
-  function dismiss(reason: "dismissed" | "subscribed") {
-    window.localStorage.setItem(STORAGE_KEY, reason);
-    setVisible(false);
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,10 +47,11 @@ export function AnnouncementBar({
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean;
         error?: string;
+        resent?: boolean;
       } | null;
       if (res.ok && json?.ok) {
+        setResent(Boolean(json.resent));
         setStatus("success");
-        window.localStorage.setItem(STORAGE_KEY, "subscribed");
       } else {
         setStatus("error");
         setError(
@@ -83,7 +76,9 @@ export function AnnouncementBar({
       <div className="mx-auto flex max-w-(--breakpoint-2xl) flex-col gap-2 px-4 py-2.5 pr-12 md:flex-row md:items-center md:justify-center md:gap-6">
         {status === "success" ? (
           <p className="text-center text-sm font-medium">
-            {t.announcement.success}
+            {resent
+              ? t.announcement.successResent
+              : fill(t.announcement.success, { percentage })}
           </p>
         ) : (
           <>
@@ -139,9 +134,7 @@ export function AnnouncementBar({
       <button
         type="button"
         aria-label={t.announcement.closeBar}
-        onClick={() =>
-          dismiss(status === "success" ? "subscribed" : "dismissed")
-        }
+        onClick={() => setVisible(false)}
         className="absolute top-2 right-2 rounded-md p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
       >
         <XIcon className="size-4" aria-hidden />

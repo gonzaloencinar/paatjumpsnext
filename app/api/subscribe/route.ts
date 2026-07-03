@@ -143,6 +143,11 @@ export async function POST(request: Request) {
   // con Shopify). Sin promo activa, la bienvenida sale sin código.
   const promo = await getActiveGeneralPromotion();
 
+  // Duplicado (ya suscrito) → reenvío del MISMO código por si acaso fue a spam.
+  // Clave de idempotencia estable (Resend deduplica ~24h): absorbe reenvíos
+  // repetidos y corta el reenvío-bombing de bots. Pasadas 24h vuelve a enviar.
+  const alreadySubscribed = !isNewSignup;
+
   try {
     await sendCrmEmail({
       to: email,
@@ -178,5 +183,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, resent: alreadySubscribed });
 }

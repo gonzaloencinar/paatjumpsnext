@@ -1,3 +1,4 @@
+import { QuickAddButton } from "components/cart/quick-add-button";
 import { GridTileImage } from "components/grid/tile";
 import { getCollectionProducts } from "lib/shopify";
 import type { Product } from "lib/shopify/types";
@@ -16,8 +17,8 @@ function ThreeItemGridItem({
     <div
       className={
         size === "full"
-          ? "md:col-span-4 md:row-span-2"
-          : "md:col-span-2 md:row-span-1"
+          ? "relative md:col-span-4 md:row-span-2"
+          : "relative md:col-span-2 md:row-span-1"
       }
     >
       <Link
@@ -43,6 +44,7 @@ function ThreeItemGridItem({
           }}
         />
       </Link>
+      <QuickAddButton product={item} />
     </div>
   );
 }
