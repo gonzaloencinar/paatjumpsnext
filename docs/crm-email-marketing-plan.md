@@ -1,6 +1,6 @@
 # Plan: Campaña de lanzamiento + CRM/Email marketing propio
 
-> Estado: **Fase 1 y panel /admin implementados y probados (2026-07-02)**; **motor de campañas (3a) y secuencias (3c, triggers signup/manual) ✅ implementados y probados (2026-07-03)**; Fase 2 (recuperación de carrito + triggers de pedidos), 3b y 3d (§16) pendientes.
+> Estado: **Fase 1 y panel /admin (2026-07-02)**; **motor de campañas (3a), secuencias (3c) y Fase 2 (webhooks Shopify + recuperación de carrito) ✅ implementados y probados (2026-07-03)** — `cart_recovery` y la serie de bienvenida esperan a que el dueño revise el copy y las encienda; 3b (segmentos) y 3d (editor de bloques) pendientes.
 > Objetivo doble: (1) sacar la **campaña de lanzamiento -20%** con captación de email, y (2) sentar la base de un **CRM + plataforma de email marketing propia** dentro de esta misma app (Next.js) para campañas, automatizaciones (recuperación de carrito, bienvenida), segmentos y métricas.
 
 ---
@@ -435,14 +435,16 @@ EMAIL_LINK_SIGNING_SECRET=           # firma de los links de baja (y tracking pr
 - [x] Doble opt-in: **descartado** (decisión 2026-07-02).
 - **Aceptación:** ✅ probada end-to-end contra servicios reales — alta → bienvenida con `PAAT20` recibida; webhook `email.opened` firmado actualiza `opened_at` (firma falsa → 401); baja firmada crea la supresión (token inválido → 400). ⚠️ Falta crear la página `/politica-de-privacidad` en Shopify (la barra enlaza a ella).
 
-### Fase 2 — Recuperación de carrito
+### Fase 2 — Recuperación de carrito ✅ (2026-07-03, código y webhooks)
 
-- [ ] Registrar webhooks `checkouts/*` y `orders/*` + verificación HMAC.
-- [ ] Tablas `checkouts`, `orders`, `automations`, `automation_enrollments`.
-- [ ] `automation: cart_recovery` (pasos/delays configurables).
-- [ ] Cron `/api/cron/automations` + supresión por conversión.
-- [ ] Desactivar la automatización nativa de Shopify de checkout abandonado (§7.2) y cerrar la política de consentimiento para no-suscritos (§11).
-- **Aceptación:** abandonar checkout con email → recibir recuperación a la hora; comprar antes → NO recibirla.
+- [x] Webhooks `checkouts/create|update` + `orders/create` en `/api/webhooks/shopify` con verificación HMAC (secret = client secret de la app CLI PaatJumpsNext; scopes `read_orders`/`read_checkouts` añadidos vía `shopify app deploy` + `shopify store auth`). _Probado con payloads firmados: carrito → contacto+inscripción; pedido → conversión+cancelación+derivados._
+- [x] Campos derivados en `contacts` (`orders_count`, `total_spent`, `last_order_at`, `last_open_at`, `last_click_at`, `tags`) — los mantienen los webhooks de Shopify y Resend (base de los segmentos 3b).
+- [x] `cart_recovery` con pasos editables (1 h y +23 h, botón `{{url_carrito}}` → `abandoned_checkout_url`) — **desactivada** hasta revisar el copy.
+- [x] Supresión por conversión: `orders/create` marca el checkout `converted`, cancela su inscripción y las `cancel_on_order` (urgencia de bienvenida); el motor además cancela al vuelo si el checkout ya no está `abandoned`.
+- [x] Consentimiento (§11, decisión conservadora): sin contacto suscrito solo se inscribe si `buyer_accepts_marketing` (se crea contacto `source='checkout'` con consentimiento documentado); sin consentimiento, no hay email de cortesía.
+- [x] Atribución (§16.6, parte 1): `orders.campaign_id` por ventana de clic ≤5 días; por promo enlazada llega con 3d.
+- [ ] ⚠️ **Pendiente del dueño antes de encender `cart_recovery`:** desactivar la automatización nativa de checkout abandonado en Shopify (Admin → Marketing → Automatizaciones) y, en el primer checkout real, comprobar que el webhook trae `email` (si llega null → activar Protected Customer Data de la app en dev.shopify.com).
+- **Aceptación:** abandonar checkout con email → recuperación a la hora; comprar antes → NO recibirla. _(Verificado con webhooks sintéticos firmados; queda el ensayo con un checkout real.)_
 
 ### Fase 3 — CRM + campañas + métricas
 

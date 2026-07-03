@@ -1,4 +1,5 @@
 import { mergeName } from "@/lib/crm/campaign-engine";
+import { CRM } from "@/lib/crm/config";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
@@ -70,7 +71,13 @@ export async function processAutomations(
     ),
   ];
 
-  const [stepsRes, contactsRes] = await Promise.all([
+  const checkoutIds = [
+    ...new Set(
+      due.map((e) => e.checkout_id).filter((v): v is number => v !== null),
+    ),
+  ];
+
+  const [stepsRes, contactsRes, checkoutsRes] = await Promise.all([
     supabase
       .from("automation_steps")
       .select("*")
@@ -79,9 +86,19 @@ export async function processAutomations(
       .from("contacts")
       .select("id, email, first_name, status")
       .in("id", contactIds),
+    checkoutIds.length > 0
+      ? supabase
+          .from("checkouts")
+          .select("id, recovery_url, status")
+          .in("id", checkoutIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (stepsRes.error) throw stepsRes.error;
   if (contactsRes.error) throw contactsRes.error;
+  if (checkoutsRes.error) throw checkoutsRes.error;
+  const checkoutById = new Map(
+    (checkoutsRes.data ?? []).map((checkout) => [checkout.id, checkout]),
+  );
 
   const stepsByAutomation = new Map<string, Tables<"automation_steps">[]>(
     automationIds.map((id) => [
@@ -116,6 +133,23 @@ export async function processAutomations(
       continue;
     }
 
+    // Recuperación de carrito: si el checkout ya convirtió (o desapareció),
+    // no hay nada que recuperar
+    const checkout = enrollment.checkout_id
+      ? checkoutById.get(enrollment.checkout_id)
+      : null;
+    if (
+      enrollment.checkout_id &&
+      (!checkout || checkout.status !== "abandoned")
+    ) {
+      await supabase
+        .from("automation_enrollments")
+        .update({ status: "canceled", next_run_at: null })
+        .eq("id", enrollment.id);
+      summary.canceled += 1;
+      continue;
+    }
+
     // No queda paso que enviar (borrados/desactivados después de inscribir)
     if (!step) {
       await supabase
@@ -126,12 +160,21 @@ export async function processAutomations(
       continue;
     }
 
+    // {{url_carrito}} → recovery_url del checkout (fallback: el carrito de la
+    // web) — se resuelve siempre para que el tag nunca llegue al email
+    const cartUrl = checkout?.recovery_url ?? `${CRM.baseUrl}/cart`;
+    const mergeAll = (text: string) =>
+      mergeName(text, contact.first_name).replace(
+        /\{\{\s*url_carrito\s*\}\}/gi,
+        cartUrl,
+      );
+
     try {
       const result = await sendCrmEmail({
         to: contact.email,
-        subject: mergeName(step.subject ?? "", contact.first_name),
+        subject: mergeAll(step.subject ?? ""),
         react: CampaignEmail({
-          bodyHtml: mergeName(step.body_html ?? "", contact.first_name),
+          bodyHtml: mergeAll(step.body_html ?? ""),
           preheader: step.preheader,
           unsubscribeUrl: unsubscribeUrl(contact.email),
         }),

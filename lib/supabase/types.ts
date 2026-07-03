@@ -330,9 +330,15 @@ export type Database = {
           email: string;
           first_name: string | null;
           id: string;
+          last_click_at: string | null;
+          last_open_at: string | null;
+          last_order_at: string | null;
+          orders_count: number;
           shopify_customer_id: string | null;
           source: string | null;
           status: string;
+          tags: string[];
+          total_spent: number;
           updated_at: string;
         };
         Insert: {
@@ -344,9 +350,15 @@ export type Database = {
           email: string;
           first_name?: string | null;
           id?: string;
+          last_click_at?: string | null;
+          last_open_at?: string | null;
+          last_order_at?: string | null;
+          orders_count?: number;
           shopify_customer_id?: string | null;
           source?: string | null;
           status?: string;
+          tags?: string[];
+          total_spent?: number;
           updated_at?: string;
         };
         Update: {
@@ -358,9 +370,15 @@ export type Database = {
           email?: string;
           first_name?: string | null;
           id?: string;
+          last_click_at?: string | null;
+          last_open_at?: string | null;
+          last_order_at?: string | null;
+          orders_count?: number;
           shopify_customer_id?: string | null;
           source?: string | null;
           status?: string;
+          tags?: string[];
+          total_spent?: number;
           updated_at?: string;
         };
         Relationships: [];

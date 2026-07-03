@@ -126,6 +126,15 @@ export async function POST(request: Request) {
       type: eventType,
       payload: { email_send_id: send.id },
     });
+    // Actividad derivada para segmentos (§16.2): activos vs dormidos
+    await supabase
+      .from("contacts")
+      .update(
+        eventType === "email_opened"
+          ? { last_open_at: now }
+          : { last_click_at: now },
+      )
+      .eq("id", send.contact_id);
   }
 
   return NextResponse.json({ received: true });
