@@ -24,6 +24,25 @@ export async function getActiveGeneralPromotion() {
   return data;
 }
 
+// Datos de la promo con este código (tipo + fecha de fin), para: (1) caducar la
+// cookie pj_discount cuando termina la promo y (2) decidir si ocultamos la barra
+// sticky (afiliado → no pisamos su comisión). null si el código no existe.
+export async function getPromotionByCode(code: string) {
+  "use cache";
+  cacheTag(PROMOTIONS_TAG);
+  cacheLife("minutes");
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("promotions")
+    .select("type, ends_at")
+    .eq("code", code)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
 // Promo anunciada en el storefront (toggle `announce` del CRM). Cacheada con
 // tag: los toggles del panel hacen updateTag(PROMOTIONS_TAG) y la barra
 // aparece/desaparece al momento.

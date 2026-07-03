@@ -122,6 +122,8 @@ function createEmptyCart(): Cart {
     checkoutUrl: "",
     totalQuantity: 0,
     lines: [],
+    discountCodes: [],
+    discountAllocations: [],
     cost: {
       subtotalAmount: { amount: "0", currencyCode: "USD" },
       totalAmount: { amount: "0", currencyCode: "USD" },

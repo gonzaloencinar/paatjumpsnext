@@ -84,7 +84,7 @@ export function WelcomeEmail({
           {code ? (
             <>
               Gracias por unirte al lanzamiento de Paat Jumps. Usa este código
-              en <strong style={{ color: "#fff" }}>cualquier comba</strong> de
+              en <strong style={{ color: "#fff" }}>tu primer pedido</strong> de
               la tienda:
             </>
           ) : (

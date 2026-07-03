@@ -7,7 +7,9 @@ import { useDictionary, useLocale } from "components/i18n/locale-context";
 import LoadingDots from "components/loading-dots";
 import Price from "components/price";
 import { DEFAULT_OPTION } from "lib/constants";
+import { localeTag } from "lib/i18n/config";
 import { productPath } from "lib/i18n/routes";
+import { HIGH_THRESHOLD } from "lib/shipping";
 import { createUrl } from "lib/utils";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,11 +19,9 @@ import { createCartAndSetCookie, redirectToCheckout } from "./actions";
 import { useCart } from "./cart-context";
 import { DeleteItemButton } from "./delete-item-button";
 import { EditItemQuantityButton } from "./edit-item-quantity-button";
-import {
-  FREE_SHIPPING_THRESHOLD,
-  FreeShippingProgress,
-} from "./free-shipping-progress";
+import { FreeShippingProgress } from "./free-shipping-progress";
 import OpenCart from "./open-cart";
+import { useShippingZone } from "./shipping-context";
 
 type MerchandiseSearchParams = {
   [key: string]: string;
@@ -31,9 +31,30 @@ export default function CartModal() {
   const { cart, updateCartItem } = useCart();
   const locale = useLocale();
   const t = useDictionary();
-  // The 50 € free-shipping promo applies to Spain (Península/Baleares); hide
-  // the progress UI for international (English) visitors.
-  const showFreeShipping = locale === "es";
+  // Zona de envío según geo-IP (lib/shipping.ts): Península/Baleares gratis
+  // desde 45 € (si no 5,90 €), Canarias/Ceuta/Melilla y UE/UK gratis desde
+  // 100 € (si no 14,90 €). null = destino sin envío gratis → ocultamos la UI.
+  const zone = useShippingZone();
+  const showFreeShipping = zone !== null;
+
+  const subtotal = cart ? Number(cart.cost.subtotalAmount.amount) : 0;
+  const currencyCode = cart?.cost.subtotalAmount.currencyCode ?? "EUR";
+  const qualifiesFreeShipping = zone !== null && subtotal >= zone.threshold;
+  // Código promocional aplicado al carrito (llegó por enlace ?code=… o pegado).
+  const appliedCode =
+    cart?.discountCodes?.find((d) => d.applicable)?.code ?? null;
+  const discountAmount =
+    cart?.discountAllocations?.reduce(
+      (sum, a) => sum + Number(a.discountedAmount.amount),
+      0,
+    ) ?? 0;
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat(localeTag(locale), {
+      style: "currency",
+      currency: currencyCode,
+      currencyDisplay: "narrowSymbol",
+    }).format(value);
+
   const [isOpen, setIsOpen] = useState(false);
   const quantityRef = useRef(cart?.totalQuantity);
   const openCart = () => setIsOpen(true);
@@ -204,21 +225,36 @@ export default function CartModal() {
                         );
                       })}
                   </ul>
-                  {showFreeShipping ? (
+                  {showFreeShipping && zone ? (
                     <FreeShippingProgress
-                      subtotal={Number(cart.cost.subtotalAmount.amount)}
-                      currencyCode={cart.cost.subtotalAmount.currencyCode}
+                      subtotal={subtotal}
+                      currencyCode={currencyCode}
+                      threshold={zone.threshold}
                       onContinue={closeCart}
                     />
                   ) : null}
                   <div className="py-4 text-sm text-white/60">
+                    {appliedCode ? (
+                      <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 dark:border-neutral-700">
+                        <p>{t.cart.discountApplied}</p>
+                        <p className="text-right font-medium text-orange-500">
+                          {appliedCode}
+                          {discountAmount > 0
+                            ? ` · −${formatMoney(discountAmount)}`
+                            : ""}
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 dark:border-neutral-700">
                       <p>{t.cart.shipping}</p>
-                      {showFreeShipping &&
-                      Number(cart.cost.subtotalAmount.amount) >=
-                        FREE_SHIPPING_THRESHOLD ? (
+                      {qualifiesFreeShipping ? (
                         <p className="text-right font-medium text-orange-500">
                           {t.cart.freeStarred}
+                        </p>
+                      ) : showFreeShipping && zone ? (
+                        <p className="text-right">
+                          {formatMoney(zone.estimated)}
+                          <span className="align-super text-[10px]">*</span>
                         </p>
                       ) : (
                         <p className="text-right">
@@ -226,11 +262,15 @@ export default function CartModal() {
                         </p>
                       )}
                     </div>
-                    {showFreeShipping &&
-                    Number(cart.cost.subtotalAmount.amount) >=
-                      FREE_SHIPPING_THRESHOLD ? (
+                    {qualifiesFreeShipping && zone ? (
                       <p className="mb-3 text-right text-xs text-neutral-500">
-                        {t.cart.freeShippingFootnote}
+                        {zone.threshold >= HIGH_THRESHOLD
+                          ? t.cart.freeShippingFootnoteHigh
+                          : t.cart.freeShippingFootnote}
+                      </p>
+                    ) : !qualifiesFreeShipping && showFreeShipping ? (
+                      <p className="mb-3 text-right text-xs text-neutral-500">
+                        {t.cart.estimatedShippingNote}
                       </p>
                     ) : null}
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 pt-1 dark:border-neutral-700">

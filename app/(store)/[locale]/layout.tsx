@@ -1,15 +1,20 @@
+import { AttributionTracker } from "components/analytics/attribution-tracker";
 import { CartProvider } from "components/cart/cart-context";
+import { ShippingProvider } from "components/cart/shipping-context";
 import { LocaleProvider } from "components/i18n/locale-context";
 import { Navbar } from "components/layout/navbar";
 import { AnnouncementBar } from "components/marketing/announcement-bar";
 import { DiscountCodeHandler } from "components/marketing/discount-code-handler";
 import { WelcomeToast } from "components/welcome-toast";
-import { getAnnouncedPromotion } from "lib/crm/promotions";
+import { getAnnouncedPromotion, getPromotionByCode } from "lib/crm/promotions";
 import { geist } from "lib/fonts";
 import { defaultLocale, isLocale, locales } from "lib/i18n/config";
 import { browsePath } from "lib/i18n/routes";
 import { getCart } from "lib/shopify";
+import { COUNTRY_COOKIE } from "lib/i18n/config";
+import { shippingZone } from "lib/shipping";
 import { baseUrl, cn } from "lib/utils";
+import { cookies, headers } from "next/headers";
 import Script from "next/script";
 import { ReactNode } from "react";
 import { Toaster } from "sonner";
@@ -58,6 +63,30 @@ export default async function StoreLayout({
   // Barra de captación: la gobierna el toggle "Anuncio web" de /admin/promotions
   const promo = await getAnnouncedPromotion();
 
+  // Zona de envío para el carrito (umbral gratis + coste estimado), deducida por
+  // geo-IP (Vercel). El cookie pj_country (lo fija el proxy) es el respaldo
+  // cuando la cabecera no viaja. Región = subdivisión ISO 3166-2 para distinguir
+  // Canarias/Ceuta/Melilla dentro de ES. Ver lib/shipping.ts.
+  const [headerList, cookieStore] = await Promise.all([headers(), cookies()]);
+  const country =
+    headerList.get("x-vercel-ip-country") ??
+    cookieStore.get(COUNTRY_COOKIE)?.value ??
+    "";
+  const region = headerList.get("x-vercel-ip-country-region") ?? "";
+  const zone = shippingZone(country, region);
+
+  // Barra sticky de captación: la ocultamos solo si el visitante ya tiene el
+  // código de la promo anunciada AHORA (no le pedimos lo que ya tiene), o si
+  // tiene un código de afiliado (no lo pisamos con la promo general). Si se
+  // anuncia otra promo con otro código, la barra vuelve a salir aunque su cookie
+  // siga viva. La cookie pj_discount la fija applyDiscountCode.
+  const pendingCode = cookieStore.get("pj_discount")?.value ?? null;
+  const heldPromo = pendingCode ? await getPromotionByCode(pendingCode) : null;
+  const holdsAnnounced = Boolean(promo) && pendingCode === promo?.code;
+  const holdsAffiliate = heldPromo?.type === "affiliate";
+  const showAnnouncement =
+    Boolean(promo) && !holdsAnnounced && !holdsAffiliate;
+
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -99,20 +128,24 @@ export default async function StoreLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
         />
         <LocaleProvider locale={locale}>
-          <CartProvider cartPromise={cart}>
-            {promo ? (
-              <AnnouncementBar
-                name={promo.name}
-                percentage={promo.percentage}
-              />
-            ) : null}
-            <Navbar locale={locale} />
-            <main>
-              {children}
-              <WelcomeToast />
-            </main>
-            <DiscountCodeHandler />
-          </CartProvider>
+          <ShippingProvider zone={zone}>
+            <CartProvider cartPromise={cart}>
+              {showAnnouncement && promo ? (
+                <AnnouncementBar
+                  name={promo.name}
+                  percentage={promo.percentage}
+                  code={promo.code}
+                />
+              ) : null}
+              <Navbar locale={locale} />
+              <main>
+                {children}
+                <WelcomeToast />
+              </main>
+              <DiscountCodeHandler />
+              <AttributionTracker />
+            </CartProvider>
+          </ShippingProvider>
         </LocaleProvider>
         <Toaster closeButton />
       </body>

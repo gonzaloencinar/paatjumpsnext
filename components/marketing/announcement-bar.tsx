@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { XIcon } from "lucide-react";
+import { useCart } from "components/cart/cart-context";
 import { useDictionary } from "components/i18n/locale-context";
 import { fill } from "lib/i18n/dictionaries";
 
@@ -16,17 +17,27 @@ type Status = "idle" | "sending" | "success" | "error";
 export function AnnouncementBar({
   name,
   percentage,
+  code,
 }: {
   name: string;
   percentage: number;
+  code: string;
 }) {
   const t = useDictionary();
+  const { cart } = useCart();
   const [visible, setVisible] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!visible) return null;
+  // Si el carrito ya lleva EL código de esta promo (llegó por enlace ?code=… en
+  // este mismo aterrizaje, antes de que el server re-renderice), ocultamos la
+  // barra: no le pedimos el email para darle lo que ya tiene.
+  const hasAnnouncedCode = Boolean(
+    cart?.discountCodes?.some((d) => d.applicable && d.code === code),
+  );
+
+  if (!visible || hasAnnouncedCode) return null;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

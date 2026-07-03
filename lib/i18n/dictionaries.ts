@@ -44,6 +44,9 @@ const es = {
     exploreAll: "Explora todas las combas Paat Jumps en un solo lugar.",
     viewAllRopes: "Ver todas las combas",
     searchPlaceholder: "Buscar productos...",
+    language: "Idioma",
+    spanish: "Español",
+    english: "Inglés",
   },
   footer: {
     all: "Todas",
@@ -60,6 +63,10 @@ const es = {
     freeStarred: "Gratis*",
     calculatedAtCheckout: "Se calcula al finalizar la compra",
     freeShippingFootnote: "*Envío gratis a Península y Baleares",
+    freeShippingFootnoteHigh: "*Envío gratis a partir de 100 €",
+    estimatedShippingNote:
+      "*Envío estimado por tu ubicación; se confirma al finalizar la compra",
+    discountApplied: "Código aplicado",
     total: "Total",
     checkout: "Finalizar compra",
     addToCart: "Añadir al carrito",
@@ -120,6 +127,16 @@ const es = {
   },
   page: {
     lastUpdatedPrefix: "Última actualización de este documento:",
+  },
+  blog: {
+    title: "El blog de la comba",
+    metaTitle: "Blog: aprender a saltar a la comba, técnica y trucos",
+    metaDescription:
+      "Guías para aprender a saltar a la comba, mejorar la técnica y elegir bien tu comba. Escritas por Patri, de Paat Jumps.",
+    empty: "Pronto habrá artículos por aquí.",
+    publishedPrefix: "Publicado el",
+    updatedPrefix: "Actualizado el",
+    backToBlog: "Volver al blog",
   },
   collection: {
     // Último fallback si la colección de Shopify no trae description ni SEO.
@@ -255,6 +272,9 @@ const en = {
     exploreAll: "Explore every Paat Jumps rope in one place.",
     viewAllRopes: "View all ropes",
     searchPlaceholder: "Search products...",
+    language: "Language",
+    spanish: "Spanish",
+    english: "English",
   },
   footer: {
     all: "All",
@@ -271,6 +291,10 @@ const en = {
     freeStarred: "Free*",
     calculatedAtCheckout: "Calculated at checkout",
     freeShippingFootnote: "*Free shipping in mainland Spain & Balearic Islands",
+    freeShippingFootnoteHigh: "*Free shipping on orders over €100",
+    estimatedShippingNote:
+      "*Estimated shipping for your location; confirmed at checkout",
+    discountApplied: "Discount applied",
     total: "Total",
     checkout: "Checkout",
     addToCart: "Add to cart",
@@ -330,6 +354,16 @@ const en = {
   },
   page: {
     lastUpdatedPrefix: "This document was last updated on",
+  },
+  blog: {
+    title: "The jump rope blog",
+    metaTitle: "Blog: jump rope technique, guides and tricks",
+    metaDescription:
+      "Guides on learning to jump rope, improving technique and picking the right rope. Written in Spanish by Patri from Paat Jumps.",
+    empty: "Articles coming soon.",
+    publishedPrefix: "Published on",
+    updatedPrefix: "Updated on",
+    backToBlog: "Back to the blog",
   },
   collection: {
     fallbackDescription:

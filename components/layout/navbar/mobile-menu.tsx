@@ -13,6 +13,7 @@ import {
 import { useDictionary, useLocale } from "components/i18n/locale-context";
 import { browsePath } from "lib/i18n/routes";
 import type { CategoryMenuItem } from "./category-menu";
+import LanguageSwitcher from "./language-switcher";
 import Search, { SearchSkeleton } from "./search";
 
 export default function MobileMenu({
@@ -120,6 +121,13 @@ export default function MobileMenu({
                     </Link>
                   </div>
                 ) : null}
+
+                <div className="mt-6 w-full">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-white/50">
+                    {t.nav.language}
+                  </p>
+                  <LanguageSwitcher onSelect={closeMobileMenu} />
+                </div>
               </div>
             </Dialog.Panel>
           </Transition.Child>

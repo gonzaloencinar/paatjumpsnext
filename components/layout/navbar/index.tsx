@@ -6,6 +6,7 @@ import { getCollections } from "lib/shopify";
 import Link from "next/link";
 import { Suspense } from "react";
 import CategoryMenu, { CategoryMenuItem } from "./category-menu";
+import LanguageSwitcher from "./language-switcher";
 import MobileMenu from "./mobile-menu";
 import Search, { SearchSkeleton } from "./search";
 
@@ -60,7 +61,8 @@ export async function Navbar({ locale }: { locale: Locale }) {
             <Search />
           </Suspense>
         </div>
-        <div className="flex justify-end md:w-1/3">
+        <div className="flex items-center justify-end gap-3 md:w-1/3">
+          <LanguageSwitcher className="hidden md:inline-flex" />
           <CartModal />
         </div>
       </div>
