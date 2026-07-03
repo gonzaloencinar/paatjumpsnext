@@ -1,3 +1,4 @@
+import { QuickAddButton } from "components/cart/quick-add-button";
 import { GridTileImage } from "components/grid/tile";
 import Footer from "components/layout/footer";
 import { Gallery } from "components/product/gallery";
@@ -7,6 +8,7 @@ import { isLocale, localeHref, type Locale } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getProduct, getProductRecommendations } from "lib/shopify";
 import type { Image } from "lib/shopify/types";
+import { baseUrl, truncateForMeta } from "lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -28,7 +30,10 @@ export async function generateMetadata(props: {
 
   return {
     title: product.seo.title || product.title,
-    description: product.seo.description || product.description,
+    // Sin seo.description escrita en Shopify, recorta la descripción larga en
+    // vez de volcarla entera (Google trunca en ~155 chars).
+    description:
+      product.seo.description || truncateForMeta(product.description),
     alternates: {
       canonical: localeHref(locale, path),
       languages: { es: path, en: `/en${path}`, "x-default": path },
@@ -66,21 +71,69 @@ export default async function ProductPage(props: {
 
   if (!product) return notFound();
 
+  const t = getDictionary(locale);
+  const productUrl = `${baseUrl}${localeHref(locale, `/product/${product.handle}`)}`;
+  const availability = product.availableForSale
+    ? "https://schema.org/InStock"
+    : "https://schema.org/OutOfStock";
+  const { minVariantPrice, maxVariantPrice } = product.priceRange;
+  // El precio en el JSON-LD es lo que habilita el rich snippet de precio.
+  // 1 producto = 1 color con precio único: Offer con `price`; AggregateOffer
+  // (low/high) solo si algún día hay rango real entre variantes.
+  const singlePrice = minVariantPrice.amount === maxVariantPrice.amount;
+  const priceValidUntil = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.title,
-    description: product.description,
-    image: product.featuredImage.url,
-    offers: {
-      "@type": "AggregateOffer",
-      availability: product.availableForSale
-        ? "https://schema.org/InStock"
-        : "https://schema.org/OutOfStock",
-      priceCurrency: product.priceRange.minVariantPrice.currencyCode,
-      highPrice: product.priceRange.maxVariantPrice.amount,
-      lowPrice: product.priceRange.minVariantPrice.amount,
-    },
+    description: truncateForMeta(product.description, 5000),
+    image: product.images.slice(0, 5).map((image: Image) => image.url),
+    url: productUrl,
+    brand: { "@type": "Brand", name: "Paat Jumps" },
+    offers: singlePrice
+      ? {
+          "@type": "Offer",
+          url: productUrl,
+          price: minVariantPrice.amount,
+          priceCurrency: minVariantPrice.currencyCode,
+          availability,
+          itemCondition: "https://schema.org/NewCondition",
+          priceValidUntil,
+        }
+      : {
+          "@type": "AggregateOffer",
+          availability,
+          priceCurrency: minVariantPrice.currencyCode,
+          highPrice: maxVariantPrice.amount,
+          lowPrice: minVariantPrice.amount,
+          offerCount: product.variants.length,
+        },
+  };
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: t.collection.breadcrumbHome,
+        item: locale === "en" ? `${baseUrl}/en` : baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: t.collection.breadcrumbCatalog,
+        item: `${baseUrl}${localeHref(locale, "/search")}`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: product.title,
+        item: productUrl,
+      },
+    ],
   };
 
   return (
@@ -89,6 +142,12 @@ export default async function ProductPage(props: {
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(productJsonLd),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd),
         }}
       />
       <div className="mx-auto max-w-(--breakpoint-2xl) px-4">
@@ -137,7 +196,7 @@ async function RelatedProducts({ id, locale }: { id: string; locale: Locale }) {
         {relatedProducts.map((product) => (
           <li
             key={product.handle}
-            className="aspect-square w-full flex-none min-[475px]:w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5"
+            className="relative aspect-square w-full flex-none min-[475px]:w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5"
           >
             <Link
               className="relative h-full w-full"
@@ -156,6 +215,7 @@ async function RelatedProducts({ id, locale }: { id: string; locale: Locale }) {
                 sizes="(min-width: 1024px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, (min-width: 475px) 50vw, 100vw"
               />
             </Link>
+            <QuickAddButton product={product} />
           </li>
         ))}
       </ul>

@@ -5,8 +5,9 @@ import type { Locale } from "./config";
 // content itself comes translated from Shopify via @inContext + Translate & Adapt.
 const es = {
   home: {
+    metaTitle: "Combas de saltar profesionales hechas a mano",
     metaDescription:
-      "Combas de saltar hechas a mano para atletas. Cable de acero recubierto y diseño duradero.",
+      "Combas segmentadas y PVC hechas a mano en España. Cuerda de 4 mm para más control: aprende, entrena y haz trucos. Envío gratis a Península y Baleares.",
   },
   hero: {
     titleLine1: "No todas las combas",
@@ -86,8 +87,12 @@ const es = {
     soldOutSuffix: "(Agotado)",
   },
   search: {
-    metaTitle: "Buscar",
-    metaDescription: "Busca productos en la tienda.",
+    metaTitle: "Todas las combas",
+    metaDescription:
+      "Explora todas las combas de saltar Paat Jumps: segmentadas (beaded) y PVC de velocidad, hechas a mano en España. Filtra por tipo, color y precio.",
+    h1: "Todas las combas",
+    intro:
+      "Combas segmentadas y combas PVC de velocidad, montadas a mano en España.",
     noResultsFor: "No hay combas que coincidan con",
     showingPrefix: "Mostrando",
     resultOne: "resultado",
@@ -116,6 +121,64 @@ const es = {
   page: {
     lastUpdatedPrefix: "Última actualización de este documento:",
   },
+  collection: {
+    // Último fallback si la colección de Shopify no trae description ni SEO.
+    fallbackDescription:
+      "Colección {title} de Paat Jumps: combas de saltar hechas a mano en España.",
+    breadcrumbHome: "Inicio",
+    breadcrumbCatalog: "Combas",
+    faqHeading: "Preguntas frecuentes",
+  },
+  // FAQs por colección (clave = handle de Shopify). Se renderizan al pie de la
+  // página de categoría y alimentan el JSON-LD FAQPage: son el único contenido
+  // indexable de esas páginas más allá de la parrilla, elegidas contra
+  // búsquedas long-tail reales (qué es, cuál elegir, cómo ajustar, envío).
+  collectionFaqs: {
+    "combas-segmentadas": [
+      {
+        q: "¿Qué es una comba segmentada o beaded rope?",
+        a: "Es una comba con cuentas (segmentos) de PVC ensartadas sobre una cuerda de nailon. Las cuentas le dan peso y sonido: se oye un «tic» cada vez que la comba toca el suelo, y ese ritmo te dice exactamente cuándo saltar. Por eso es la comba con la que más rápido se aprende y la preferida para freestyle.",
+      },
+      {
+        q: "¿Es la mejor comba para aprender a saltar?",
+        a: "Sí. El peso repartido mantiene la forma del arco aunque el giro no sea perfecto, y el sonido funciona como un metrónomo natural. En pocos días consigues un salto constante, y la misma comba te sirve después para trucos y freestyle.",
+      },
+      {
+        q: "¿Qué diferencia a las combas segmentadas de Paat Jumps?",
+        a: "La cuerda: 4 mm de grosor frente a los 2,5 mm habituales de otras marcas. Más control, más estabilidad en cada vuelta y mucha más durabilidad. Cada comba se monta a mano en España y los mangos llevan el logo grabado.",
+      },
+      {
+        q: "¿Cómo ajusto la longitud de la comba?",
+        a: "En un minuto y con unas tijeras: corta la cuerda sobrante y listo. Como referencia, pisa el centro de la comba con un pie: los mangos deben llegarte a la axila. Si estás empezando, déjala un poco más larga.",
+      },
+      {
+        q: "¿Cuánto tarda el envío?",
+        a: "Preparamos el pedido en 24 h y la entrega tarda 24/48 h en Península y Baleares, con envío gratis.",
+      },
+    ],
+    "combas-pvc": [
+      {
+        q: "¿Para qué sirve una comba de PVC?",
+        a: "Para velocidad y fluidez. La cuerda de PVC es ligera y gira muy rápido: ideal para saltos rápidos, dobles y combinaciones veloces de freestyle. Es la comba clásica de entrenamiento.",
+      },
+      {
+        q: "¿Comba PVC o comba segmentada: cuál elijo?",
+        a: "Si estás empezando o quieres aprender trucos con máximo control, la segmentada: su peso y su sonido marcan el ritmo. Si buscas ligereza y velocidad pura, la PVC. Muchos saltadores acaban usando las dos según el entrenamiento.",
+      },
+      {
+        q: "¿Puedo ajustar la longitud?",
+        a: "Sí, en un minuto y con unas tijeras: corta la cuerda sobrante a tu altura. Pisa el centro de la comba con un pie: los mangos deben llegarte a la axila.",
+      },
+      {
+        q: "¿Puedo entrenar en exterior con ella?",
+        a: "Sí, el PVC aguanta bien el exterior. Ten en cuenta que las superficies muy abrasivas, como el asfalto rugoso, desgastan antes cualquier cuerda: si puedes, alterna con suelos lisos.",
+      },
+      {
+        q: "¿Cuánto tarda el envío?",
+        a: "Preparamos el pedido en 24 h y la entrega tarda 24/48 h en Península y Baleares, con envío gratis.",
+      },
+    ],
+  } as Record<string, { q: string; a: string }[]>,
   error: {
     title: "¡Vaya!",
     message:
@@ -129,7 +192,10 @@ const es = {
   },
   announcement: {
     ariaLabel: "Oferta de lanzamiento",
-    success: "Hecho: revisa tu correo, tu código −20% va de camino. 📬",
+    success:
+      "Hecho: revisa tu correo, tu código −{percentage}% va de camino. 📬",
+    successResent:
+      "Ese email ya estaba suscrito: te reenviamos el código por si se coló en spam. 📬",
     onFirstOrder: "en tu primer pedido",
     emailPlaceholder: "tu@email.com",
     yourEmail: "Tu email",
@@ -150,8 +216,9 @@ const es = {
 
 const en = {
   home: {
+    metaTitle: "Handmade Beaded & PVC Jump Ropes",
     metaDescription:
-      "Handmade jump ropes for athletes. Coated steel cable and durable design.",
+      "Professional beaded and PVC jump ropes handmade in Spain. A thick 4 mm cord for control: learn, train and do tricks. Fast shipping across Europe.",
   },
   hero: {
     titleLine1: "Not all jump ropes",
@@ -231,8 +298,11 @@ const en = {
     soldOutSuffix: "(Sold out)",
   },
   search: {
-    metaTitle: "Search",
-    metaDescription: "Search for products in the store.",
+    metaTitle: "All Jump Ropes",
+    metaDescription:
+      "Browse every Paat Jumps jump rope: beaded ropes and PVC speed ropes, handmade in Spain. Filter by type, color and price.",
+    h1: "All jump ropes",
+    intro: "Beaded jump ropes and PVC speed ropes, hand-assembled in Spain.",
     noResultsFor: "There are no ropes matching",
     showingPrefix: "Showing",
     resultOne: "result",
@@ -261,6 +331,59 @@ const en = {
   page: {
     lastUpdatedPrefix: "This document was last updated on",
   },
+  collection: {
+    fallbackDescription:
+      "Paat Jumps {title} collection: jump ropes handmade in Spain.",
+    breadcrumbHome: "Home",
+    breadcrumbCatalog: "Jump ropes",
+    faqHeading: "Frequently asked questions",
+  },
+  collectionFaqs: {
+    "combas-segmentadas": [
+      {
+        q: "What is a beaded jump rope?",
+        a: "A jump rope with PVC beads (segments) threaded over a nylon cord. The beads add weight and sound: you hear a “tick” every time the rope hits the ground, telling you exactly when to jump. That's why it's the fastest rope to learn on and the go-to rope for freestyle.",
+      },
+      {
+        q: "Is a beaded rope the best jump rope for beginners?",
+        a: "Yes. The distributed weight keeps the arc's shape even with an imperfect swing, and the sound works as a natural metronome. Within days you get a consistent jump — and the same rope carries you into tricks and freestyle.",
+      },
+      {
+        q: "What makes Paat Jumps beaded jump ropes different?",
+        a: "The cord: 4 mm thick versus the usual 2.5 mm of other brands. More control, more stability on every rotation and far better durability. Every rope is hand-assembled in Spain, with engraved handles.",
+      },
+      {
+        q: "How do I adjust the length?",
+        a: "In one minute with scissors: trim the excess cord and you're done. As a rule of thumb, step on the middle of the rope: the handles should reach your armpit. Beginners can leave it slightly longer.",
+      },
+      {
+        q: "How long does shipping take?",
+        a: "Orders are prepared within 24 h. Delivery takes 24/48 h in Spain and a few days across the rest of Europe.",
+      },
+    ],
+    "combas-pvc": [
+      {
+        q: "What is a PVC jump rope for?",
+        a: "Speed and flow. The PVC cord is light and spins very fast: ideal for quick jumps, double unders and fast freestyle combos. It's the classic training rope.",
+      },
+      {
+        q: "PVC or beaded jump rope: which one should I pick?",
+        a: "If you're starting out or want to learn tricks with maximum control, go beaded: its weight and sound set the rhythm. If you want pure lightness and speed, go PVC. Many jumpers end up using both depending on the session.",
+      },
+      {
+        q: "Can I adjust the length?",
+        a: "Yes, in one minute with scissors: trim the excess cord to your height. Step on the middle of the rope: the handles should reach your armpit.",
+      },
+      {
+        q: "Can I train outdoors with it?",
+        a: "Yes, PVC holds up well outdoors. Keep in mind that very abrasive surfaces, like rough asphalt, wear down any rope faster: alternate with smooth floors when you can.",
+      },
+      {
+        q: "How long does shipping take?",
+        a: "Orders are prepared within 24 h. Delivery takes 24/48 h in Spain and a few days across the rest of Europe.",
+      },
+    ],
+  } as Record<string, { q: string; a: string }[]>,
   error: {
     title: "Oops!",
     message:
@@ -274,7 +397,10 @@ const en = {
   },
   announcement: {
     ariaLabel: "Launch offer",
-    success: "Done — check your inbox, your −20% code is on its way. 📬",
+    success:
+      "Done — check your inbox, your −{percentage}% code is on its way. 📬",
+    successResent:
+      "That email was already subscribed — we've resent your code in case it landed in spam. 📬",
     onFirstOrder: "off your first order",
     emailPlaceholder: "you@email.com",
     yourEmail: "Your email",

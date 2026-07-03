@@ -47,8 +47,9 @@ export function Hero({ locale = defaultLocale }: { locale?: Locale }) {
           <div className="z-10 flex flex-col items-center md:col-span-6">
             <div className="flex max-w-xl flex-col items-start text-left">
               <h1 className="text-4xl leading-[0.95] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                {t.hero.titleLine1}
-                <br />
+                {/* El espacio antes del <br /> evita que el texto plano (lo que
+                    lee Google) junte las dos líneas: «combas​son iguales». */}
+                {t.hero.titleLine1} <br />
                 <span className="text-orange-600">{t.hero.titleLine2}</span>
               </h1>
 

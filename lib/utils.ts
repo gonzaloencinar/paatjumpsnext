@@ -25,6 +25,16 @@ export const ensureStartsWith = (stringToCheck: string, startsWith: string) =>
     ? stringToCheck
     : `${startsWith}${stringToCheck}`;
 
+// Google corta las meta descriptions en ~155-160 caracteres: si el producto no
+// trae `seo.description` escrita, recortamos en un límite de palabra en vez de
+// volcar la descripción entera (700+ chars).
+export const truncateForMeta = (text: string, max = 157): string => {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 20))}…`;
+};
+
 export const validateEnvironmentVariables = () => {
   const requiredEnvironmentVariables = [
     "SHOPIFY_STORE_DOMAIN",

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 function localized(path: string, lastModified: string): Route[] {
   const es = `${baseUrl}${path}`;
   const en = `${baseUrl}/en${path}`;
-  const alternates = { languages: { es, en } };
+  const alternates = { languages: { es, en, "x-default": es } };
   return [
     { url: es, lastModified, alternates },
     { url: en, lastModified, alternates },
@@ -24,9 +24,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routesMap = localized("", new Date().toISOString());
 
   const collectionsPromise = getCollections().then((collections) =>
-    collections.flatMap((collection) =>
-      localized(collection.path, collection.updatedAt),
-    ),
+    collections
+      // `frontpage` es una colección técnica de Shopify (thin content, va con
+      // noindex); las `hidden-*` ya las filtra getCollections().
+      .filter((collection) => collection.handle !== "frontpage")
+      .flatMap((collection) =>
+        localized(collection.path, collection.updatedAt),
+      ),
   );
 
   const productsPromise = getProducts({}).then((products) =>

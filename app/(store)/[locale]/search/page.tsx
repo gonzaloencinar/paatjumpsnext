@@ -56,6 +56,12 @@ export default async function SearchPage(props: {
 
   return (
     <>
+      {!searchValue ? (
+        <header className="mt-2 mb-5 max-w-3xl">
+          <h1 className="text-3xl font-bold tracking-tight">{t.search.h1}</h1>
+          <p className="mt-1 text-white/70">{t.search.intro}</p>
+        </header>
+      ) : null}
       <RefineBar
         facets={facets}
         categories={categories}

@@ -14,6 +14,10 @@ export async function generateMetadata(props: {
   const t = getDictionary(locale);
 
   return {
+    // La home es la página con más autoridad: keyword primero + marca. El
+    // template `%s | SITE_NAME` del layout no aplica aquí (page y layout
+    // comparten segmento), así que el title se compone completo.
+    title: `${t.home.metaTitle} | ${process.env.SITE_NAME ?? "Paat Jumps"}`,
     description: t.home.metaDescription,
     alternates: {
       canonical: locale === "en" ? "/en" : "/",
