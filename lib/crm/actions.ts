@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { effectiveSteps } from "@/lib/crm/automation-engine";
 import { mergeName } from "@/lib/crm/campaign-engine";
 import { isQuietHour, madridLocalToUtc } from "@/lib/crm/schedule";
 import { sendCrmEmail } from "@/lib/email/send";
@@ -9,7 +10,11 @@ import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
 import { createClient } from "@/lib/supabase/server";
 
-export type ActionState = { error?: string; ok?: boolean } | null;
+export type ActionState = {
+  error?: string;
+  ok?: boolean;
+  message?: string;
+} | null;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -434,6 +439,258 @@ export async function toggleAutomation(automationId: string, enabled: boolean) {
     .eq("id", automationId);
   if (error) throw error;
   revalidatePath("/admin/automations");
+  revalidatePath(`/admin/automations/${automationId}`);
+}
+
+// ───────────────── Automatizaciones: secuencias (§16.4) ─────────────────
+
+const CREATABLE_TRIGGERS = new Set(["signup", "manual"]);
+
+export async function createAutomation(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  const trigger = String(formData.get("trigger") ?? "manual");
+  if (!name) return { error: "Ponle un nombre a la secuencia." };
+  if (!CREATABLE_TRIGGERS.has(trigger)) {
+    return { error: "Ese trigger llega con la Fase 2." };
+  }
+
+  const slug =
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "secuencia";
+
+  const { data, error } = await supabase
+    .from("automations")
+    .insert({
+      name,
+      trigger,
+      key: `${slug}_${crypto.randomUUID().slice(0, 4)}`,
+      enabled: false,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: "No se pudo crear la automatización." };
+
+  revalidatePath("/admin/automations");
+  redirect(`/admin/automations/${data.id}`);
+}
+
+export async function deleteAutomation(
+  automationId: string,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const { data: automation } = await supabase
+    .from("automations")
+    .select("key")
+    .eq("id", automationId)
+    .maybeSingle();
+  if (!automation) return { error: "No existe." };
+  if (automation.key === "welcome" || automation.key === "cart_recovery") {
+    return {
+      error: "Esta automatización es estructural — desactívala en su lugar.",
+    };
+  }
+  const { error } = await supabase
+    .from("automations")
+    .delete()
+    .eq("id", automationId);
+  if (error) {
+    // FK de email_sends: si ya envió emails, conservamos el histórico
+    return { error: "Ya tiene envíos registrados; desactívala en su lugar." };
+  }
+  revalidatePath("/admin/automations");
+  redirect("/admin/automations");
+}
+
+export async function addAutomationStep(automationId: string) {
+  const supabase = await requireAdmin();
+  const { data: last } = await supabase
+    .from("automation_steps")
+    .select("position")
+    .eq("automation_id", automationId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { error } = await supabase.from("automation_steps").insert({
+    automation_id: automationId,
+    position: (last?.position ?? 0) + 1,
+    delay_minutes: 1440,
+  });
+  if (error) throw error;
+  revalidatePath(`/admin/automations/${automationId}`);
+}
+
+const DELAY_FACTOR: Record<string, number> = {
+  minutes: 1,
+  hours: 60,
+  days: 1440,
+};
+
+export async function updateAutomationStep(
+  automationId: string,
+  stepId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+
+  const delayValue = Number(formData.get("delay_value"));
+  const factor = DELAY_FACTOR[String(formData.get("delay_unit") ?? "days")];
+  if (!factor || !Number.isFinite(delayValue) || delayValue < 0) {
+    return { error: "La espera no es válida." };
+  }
+
+  const subject = String(formData.get("subject") ?? "").trim();
+  const preheader = String(formData.get("preheader") ?? "").trim();
+  const bodyHtml = String(formData.get("body_html") ?? "").trim();
+
+  const { error } = await supabase
+    .from("automation_steps")
+    .update({
+      delay_minutes: Math.round(delayValue * factor),
+      subject: subject || null,
+      preheader: preheader || null,
+      body_html: bodyHtml || null,
+    })
+    .eq("id", stepId);
+  if (error) return { error: "No se pudo guardar el paso." };
+
+  revalidatePath(`/admin/automations/${automationId}`);
+  return { ok: true };
+}
+
+export async function toggleAutomationStep(
+  automationId: string,
+  stepId: string,
+  enabled: boolean,
+) {
+  const supabase = await requireAdmin();
+  const { error } = await supabase
+    .from("automation_steps")
+    .update({ enabled })
+    .eq("id", stepId);
+  if (error) throw error;
+  revalidatePath(`/admin/automations/${automationId}`);
+}
+
+export async function deleteAutomationStep(
+  automationId: string,
+  stepId: string,
+) {
+  const supabase = await requireAdmin();
+  const { error } = await supabase
+    .from("automation_steps")
+    .delete()
+    .eq("id", stepId);
+  if (error) throw error;
+  revalidatePath(`/admin/automations/${automationId}`);
+}
+
+export async function moveAutomationStep(
+  automationId: string,
+  stepId: string,
+  direction: "up" | "down",
+) {
+  const supabase = await requireAdmin();
+  const { data: steps } = await supabase
+    .from("automation_steps")
+    .select("id, position")
+    .eq("automation_id", automationId)
+    .order("position");
+  if (!steps) return;
+
+  const index = steps.findIndex((step) => step.id === stepId);
+  const other = direction === "up" ? steps[index - 1] : steps[index + 1];
+  const current = steps[index];
+  if (!current || !other) return;
+
+  // Sin unique en position: el swap en dos updates es seguro
+  await supabase
+    .from("automation_steps")
+    .update({ position: other.position })
+    .eq("id", current.id);
+  await supabase
+    .from("automation_steps")
+    .update({ position: current.position })
+    .eq("id", other.id);
+  revalidatePath(`/admin/automations/${automationId}`);
+}
+
+// Trigger manual: inscribir a los suscritos actuales que nunca han pasado
+// por esta secuencia (los que la completaron/cancelaron no se re-inscriben).
+export async function enrollSubscribers(
+  automationId: string,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+
+  const { data: automation } = await supabase
+    .from("automations")
+    .select("id, automation_steps(*)")
+    .eq("id", automationId)
+    .maybeSingle();
+  if (!automation) return { error: "La automatización no existe." };
+  const [first] = effectiveSteps(automation.automation_steps ?? []);
+  if (!first) {
+    return { error: "La secuencia no tiene ningún paso activo con contenido." };
+  }
+
+  const [contacts, suppressions, enrolled] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id, email")
+      .eq("status", "subscribed")
+      .limit(10000),
+    supabase.from("suppressions").select("email").limit(10000),
+    supabase
+      .from("automation_enrollments")
+      .select("contact_id")
+      .eq("automation_id", automationId)
+      .limit(10000),
+  ]);
+  if (contacts.error) return { error: "No se pudo leer la audiencia." };
+
+  const suppressed = new Set((suppressions.data ?? []).map((s) => s.email));
+  const already = new Set((enrolled.data ?? []).map((e) => e.contact_id));
+  const audience = (contacts.data ?? []).filter(
+    (contact) => !suppressed.has(contact.email) && !already.has(contact.id),
+  );
+  if (audience.length === 0) {
+    return { error: "No hay suscriptores nuevos que inscribir." };
+  }
+
+  const nextRunAt = new Date(
+    Date.now() + first.delay_minutes * 60_000,
+  ).toISOString();
+  let count = 0;
+  for (let i = 0; i < audience.length; i += 500) {
+    const chunk = audience.slice(i, i + 500).map((contact) => ({
+      automation_id: automationId,
+      contact_id: contact.id,
+      step: 0,
+      status: "active",
+      next_run_at: nextRunAt,
+    }));
+    const { data, error } = await supabase
+      .from("automation_enrollments")
+      .upsert(chunk, { ignoreDuplicates: true })
+      .select("id");
+    if (error) return { error: "No se pudieron crear las inscripciones." };
+    count += data?.length ?? 0;
+  }
+
+  revalidatePath(`/admin/automations/${automationId}`);
+  return {
+    ok: true,
+    message: `${count} ${count === 1 ? "suscriptor inscrito" : "suscriptores inscritos"} — el primer paso sale según su espera.`,
+  };
 }
 
 // ─────────────────────────── Supresiones ───────────────────────────

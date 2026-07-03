@@ -272,10 +272,70 @@ export async function listAutomations() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("automations")
-    .select("*")
+    .select("*, automation_steps(*)")
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((automation) => ({
+    ...automation,
+    automation_steps: [...automation.automation_steps].sort(
+      (a, b) => a.position - b.position,
+    ),
+  }));
+}
+
+export type StepStats = { sent: number; opened: number; clicked: number };
+
+export async function getAutomationDetail(id: string) {
+  const supabase = await createClient();
+  const { data: automation } = await supabase
+    .from("automations")
+    .select("*, automation_steps(*)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!automation) return null;
+
+  const [sends, enrollments] = await Promise.all([
+    supabase
+      .from("email_sends")
+      .select("automation_step_id, opened_at, clicked_at")
+      .eq("automation_id", id)
+      .limit(10000),
+    supabase
+      .from("automation_enrollments")
+      .select("status")
+      .eq("automation_id", id)
+      .limit(10000),
+  ]);
+
+  const statsByStep = new Map<string, StepStats>();
+  for (const send of sends.data ?? []) {
+    if (!send.automation_step_id) continue;
+    const entry = statsByStep.get(send.automation_step_id) ?? {
+      sent: 0,
+      opened: 0,
+      clicked: 0,
+    };
+    entry.sent += 1;
+    if (send.opened_at) entry.opened += 1;
+    if (send.clicked_at) entry.clicked += 1;
+    statsByStep.set(send.automation_step_id, entry);
+  }
+
+  const enrollmentCounts = { active: 0, completed: 0, canceled: 0 };
+  for (const enrollment of enrollments.data ?? []) {
+    if (enrollment.status === "active") enrollmentCounts.active += 1;
+    else if (enrollment.status === "completed") enrollmentCounts.completed += 1;
+    else if (enrollment.status === "canceled") enrollmentCounts.canceled += 1;
+  }
+
+  return {
+    automation,
+    steps: [...automation.automation_steps].sort(
+      (a, b) => a.position - b.position,
+    ),
+    statsByStep,
+    enrollmentCounts,
+  };
 }
 
 export async function listPromotions() {

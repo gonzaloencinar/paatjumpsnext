@@ -11,6 +11,7 @@ type CrmEmail = {
   contactId?: string | null;
   campaignId?: string | null;
   automationId?: string | null;
+  automationStepId?: string | null;
   idempotencyKey?: string;
 };
 
@@ -34,6 +35,7 @@ export async function sendCrmEmail(input: CrmEmail) {
       contact_id: input.contactId ?? null,
       campaign_id: input.campaignId ?? null,
       automation_id: input.automationId ?? null,
+      automation_step_id: input.automationStepId ?? null,
       template: input.template,
       subject: input.subject,
       status: "queued",

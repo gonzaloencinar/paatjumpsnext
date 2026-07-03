@@ -84,6 +84,50 @@ export type Database = {
           },
         ];
       };
+      automation_steps: {
+        Row: {
+          automation_id: string;
+          body_html: string | null;
+          created_at: string;
+          delay_minutes: number;
+          enabled: boolean;
+          id: string;
+          position: number;
+          preheader: string | null;
+          subject: string | null;
+        };
+        Insert: {
+          automation_id: string;
+          body_html?: string | null;
+          created_at?: string;
+          delay_minutes?: number;
+          enabled?: boolean;
+          id?: string;
+          position: number;
+          preheader?: string | null;
+          subject?: string | null;
+        };
+        Update: {
+          automation_id?: string;
+          body_html?: string | null;
+          created_at?: string;
+          delay_minutes?: number;
+          enabled?: boolean;
+          id?: string;
+          position?: number;
+          preheader?: string | null;
+          subject?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_steps_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automations: {
         Row: {
           config: Json | null;
@@ -92,6 +136,7 @@ export type Database = {
           id: string;
           key: string;
           name: string;
+          trigger: string;
         };
         Insert: {
           config?: Json | null;
@@ -100,6 +145,7 @@ export type Database = {
           id?: string;
           key: string;
           name: string;
+          trigger?: string;
         };
         Update: {
           config?: Json | null;
@@ -108,6 +154,7 @@ export type Database = {
           id?: string;
           key?: string;
           name?: string;
+          trigger?: string;
         };
         Relationships: [];
       };
@@ -362,6 +409,7 @@ export type Database = {
       email_sends: {
         Row: {
           automation_id: string | null;
+          automation_step_id: string | null;
           campaign_id: string | null;
           clicked_at: string | null;
           contact_id: string | null;
@@ -376,6 +424,7 @@ export type Database = {
         };
         Insert: {
           automation_id?: string | null;
+          automation_step_id?: string | null;
           campaign_id?: string | null;
           clicked_at?: string | null;
           contact_id?: string | null;
@@ -390,6 +439,7 @@ export type Database = {
         };
         Update: {
           automation_id?: string | null;
+          automation_step_id?: string | null;
           campaign_id?: string | null;
           clicked_at?: string | null;
           contact_id?: string | null;
@@ -408,6 +458,13 @@ export type Database = {
             columns: ["automation_id"];
             isOneToOne: false;
             referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "email_sends_automation_step_id_fkey";
+            columns: ["automation_step_id"];
+            isOneToOne: false;
+            referencedRelation: "automation_steps";
             referencedColumns: ["id"];
           },
           {
@@ -589,6 +646,25 @@ export type Database = {
       assign_discount_code: {
         Args: { p_contact_id: string };
         Returns: { code: string; expires_at: string | null }[];
+      };
+      claim_due_enrollments: {
+        Args: { p_limit: number };
+        Returns: {
+          automation_id: string | null;
+          checkout_id: number | null;
+          contact_id: string | null;
+          created_at: string;
+          id: string;
+          next_run_at: string | null;
+          status: string;
+          step: number;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "automation_enrollments";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
       };
       claim_campaign_batch: {
         Args: { p_campaign_id: string; p_limit: number };

@@ -3,6 +3,7 @@ import type { Tables } from "@/lib/supabase/types";
 export type Contact = Tables<"contacts">;
 export type Campaign = Tables<"campaigns">;
 export type Automation = Tables<"automations">;
+export type AutomationStep = Tables<"automation_steps">;
 export type Suppression = Tables<"suppressions">;
 export type EmailSend = Tables<"email_sends">;
 export type DiscountCode = Tables<"discount_codes">;
@@ -49,6 +50,33 @@ export const EMAIL_SEND_STATUS: Record<
   complained: { label: "Queja", badge: "destructive" },
   failed: { label: "Fallido", badge: "destructive" },
 };
+
+// Triggers de automatización (§16.4). Los marcados Fase 2 existen en el
+// esquema pero aún no se procesan.
+export const AUTOMATION_TRIGGER: Record<
+  string,
+  { label: string; phase2?: boolean }
+> = {
+  signup: { label: "Al suscribirse" },
+  manual: { label: "Manual" },
+  checkout_abandoned: { label: "Checkout abandonado", phase2: true },
+  order_placed: { label: "Tras comprar", phase2: true },
+  winback: { label: "Winback", phase2: true },
+};
+
+// 4320 → "3 días", 90 → "1,5 h", 30 → "30 min"
+export function delayLabel(minutes: number) {
+  if (minutes === 0) return "inmediato";
+  if (minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return days === 1 ? "1 día" : `${days} días`;
+  }
+  if (minutes % 60 === 0) return `${minutes / 60} h`;
+  if (minutes > 60) {
+    return `${new Intl.NumberFormat("es-ES").format(Math.round((minutes / 60) * 10) / 10)} h`;
+  }
+  return `${minutes} min`;
+}
 
 export const SUPPRESSION_REASON: Record<string, string> = {
   unsubscribe: "Baja voluntaria",

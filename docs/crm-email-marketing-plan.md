@@ -1,6 +1,6 @@
 # Plan: Campaña de lanzamiento + CRM/Email marketing propio
 
-> Estado: **Fase 1 y panel /admin implementados y probados (2026-07-02)**; **motor de envío de campañas (3a) ✅ implementado y probado (2026-07-03)**; Fase 2 (recuperación de carrito) y 3b–3d (§16) pendientes.
+> Estado: **Fase 1 y panel /admin implementados y probados (2026-07-02)**; **motor de campañas (3a) y secuencias (3c, triggers signup/manual) ✅ implementados y probados (2026-07-03)**; Fase 2 (recuperación de carrito + triggers de pedidos), 3b y 3d (§16) pendientes.
 > Objetivo doble: (1) sacar la **campaña de lanzamiento -20%** con captación de email, y (2) sentar la base de un **CRM + plataforma de email marketing propia** dentro de esta misma app (Next.js) para campañas, automatizaciones (recuperación de carrito, bienvenida), segmentos y métricas.
 
 ---
@@ -453,7 +453,7 @@ EMAIL_LINK_SIGNING_SECRET=           # firma de los links de baja (y tracking pr
 - [ ] **Campañas 2.0 (§16)** — sustituye a los ítems de envío/métricas que quedaban aquí; en 4 sub-fases:
   - [x] **3a Motor de envío** _(2026-07-03, probado end-to-end contra Resend/Supabase)_: `campaign_recipients` + RPCs (`materialize_campaign` idempotente, `claim_campaign_batch` con skip locked), cron cada minuto, programar con quiet hours (hora de Madrid), enviar ahora, prueba al admin, pausar/reanudar/cancelar, duplicar, `{{nombre}}`, preheader y plantilla de marca.
   - [ ] **3b Segmentos:** campos derivados en `contacts` (pedidos, actividad email) + tags + backfill de pedidos históricos, facetas compiladas a SQL, segmentos guardados con recuento, chips de filtro en `/admin/contacts`.
-  - [ ] **3c Secuencias:** `automation_steps` + editor por pasos, triggers `signup`/`order_placed`/`winback`/`manual`, salida por compra; series de bienvenida y post-compra activas.
+  - [x] **3c Secuencias** _(2026-07-03 — triggers `signup` y `manual` operativos, probado end-to-end)_: `automation_steps` + editor por pasos con stats, runner en el mismo cron (claim con lease de 15 min + Idempotency-Key por inscripción+paso), inscripción automática en el alta, inscripción manual de suscriptores, re-inscripciones permitidas, secuencias nuevas desde el panel. Serie de bienvenida D3/D6 sembrada (**desactivada** — revisar copy y encender). Quedan para Fase 2: triggers `checkout_abandoned`/`order_placed`/`winback` y la salida por compra.
   - [ ] **3d Contenido y atribución:** editor de bloques + product picker, plantilla maestra, preview, UTM, ingresos por campaña/paso en el panel.
 - **Aceptación:** programar una campaña a un segmento y verla salir sola por lotes; un alta nueva recibe la serie de bienvenida completa y deja de recibirla al comprar; el panel muestra aperturas/clics/ingresos por campaña.
 
@@ -560,6 +560,8 @@ Ciclo de vida `draft → scheduled → sending → sent` (+ `paused`/`canceled`)
 - **Guardarraíl de cuota:** si destinatarios > cuota diaria restante de Resend (free: ~100/día), bloquear el envío y sugerir Resend Pro (§15) — mejor que un blast goteando durante días.
 
 ### 16.4 Secuencias (drip) sobre `automations`
+
+> ✅ **Implementado y probado (2026-07-03)** — migración `automations_sequences`, runner en `lib/crm/automation-engine.ts` (mismo tick del cron, presupuesto de emails compartido con campañas), editor por pasos en `/admin/automations/[id]`. Operativos los triggers `signup` (el alta inscribe; la serie empieza tras la bienvenida D0 de `/api/subscribe`) y `manual` (botón "Inscribir suscriptores": solo a quien nunca pasó por la secuencia). Los pasos usan `body_html` como las campañas (los bloques llegan en 3d); un paso sin asunto o contenido no participa. Con la Fase 2: triggers de checkout/pedidos y salida por compra.
 
 ```sql
 create table automation_steps (

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enrollContactInSignupAutomations } from "@/lib/crm/automation-engine";
 import { CRM } from "@/lib/crm/config";
 import { getActiveGeneralPromotion } from "@/lib/crm/promotions";
 import { sendCrmEmail } from "@/lib/email/send";
@@ -88,6 +89,9 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   let contactId: string;
+  // Alta nueva o re-suscripción → entra en las secuencias de bienvenida
+  // (§16.4); el reenvío idempotente de un ya-suscrito no re-inscribe.
+  const isNewSignup = !existing || existing.status !== "subscribed";
   if (existing) {
     contactId = existing.id;
     if (existing.status !== "subscribed") {
@@ -165,6 +169,15 @@ export async function POST(request: Request) {
       { ok: false, error: "email_failed" },
       { status: 500 },
     );
+  }
+
+  if (isNewSignup) {
+    try {
+      await enrollContactInSignupAutomations(contactId);
+    } catch (error) {
+      // La inscripción nunca rompe el alta; el fallo queda en logs
+      console.error("subscribe: fallo inscribiendo en secuencias", error);
+    }
   }
 
   return NextResponse.json({ ok: true });
