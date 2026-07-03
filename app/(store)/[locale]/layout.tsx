@@ -37,11 +37,7 @@ export default async function StoreLayout({
     <LocaleProvider locale={locale}>
       <CartProvider cartPromise={cart}>
         {promo ? (
-          <AnnouncementBar
-            name={promo.name}
-            percentage={promo.percentage}
-            endsAt={promo.ends_at}
-          />
+          <AnnouncementBar name={promo.name} percentage={promo.percentage} />
         ) : null}
         <Navbar locale={locale} />
         <main>

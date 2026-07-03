@@ -1,11 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { XIcon } from "lucide-react";
-import { useDictionary, useLocale } from "components/i18n/locale-context";
-import { localeHref, localeTag } from "lib/i18n/config";
-import { crmConsentText, CRM_PRIVACY_PATH } from "./consent";
+import { useDictionary } from "components/i18n/locale-context";
 
 // Barra sticky de captación del lanzamiento (plan §7.1).
 // Estética de marca: naranja-600 pleno con texto blanco, sin grises.
@@ -18,13 +15,10 @@ type Status = "idle" | "sending" | "success" | "error";
 export function AnnouncementBar({
   name,
   percentage,
-  endsAt,
 }: {
   name: string;
   percentage: number;
-  endsAt: string | null;
 }) {
-  const locale = useLocale();
   const t = useDictionary();
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
@@ -84,7 +78,7 @@ export function AnnouncementBar({
   return (
     <aside
       aria-label={t.announcement.ariaLabel}
-      className="relative bg-orange-600 text-white"
+      className="sticky top-0 z-50 bg-orange-600 text-white"
     >
       <div className="mx-auto flex max-w-(--breakpoint-2xl) flex-col gap-2 px-4 py-2.5 pr-12 md:flex-row md:items-center md:justify-center md:gap-6">
         {status === "success" ? (
@@ -97,16 +91,6 @@ export function AnnouncementBar({
               🧡 {name.toUpperCase()}:{" "}
               <span className="font-black">−{percentage}%</span>{" "}
               {t.announcement.onFirstOrder}
-              {endsAt ? (
-                <span className="font-normal text-white/85">
-                  {" "}
-                  · {t.announcement.until}{" "}
-                  {new Intl.DateTimeFormat(localeTag(locale), {
-                    day: "numeric",
-                    month: "short",
-                  }).format(new Date(endsAt))}
-                </span>
-              ) : null}
             </p>
 
             <form
@@ -141,16 +125,6 @@ export function AnnouncementBar({
                     : t.announcement.wantMyCode}
                 </button>
               </div>
-
-              <p className="text-center text-[11px] leading-snug text-white/85 md:text-left">
-                {crmConsentText(locale)}{" "}
-                <Link
-                  href={localeHref(locale, CRM_PRIVACY_PATH)}
-                  className="underline underline-offset-2 hover:text-white"
-                >
-                  {t.announcement.privacyPolicy}
-                </Link>
-              </p>
 
               {status === "error" && error ? (
                 <p role="alert" className="text-xs font-medium text-white">

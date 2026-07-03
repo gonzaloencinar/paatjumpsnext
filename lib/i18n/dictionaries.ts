@@ -131,12 +131,10 @@ const es = {
     ariaLabel: "Oferta de lanzamiento",
     success: "Hecho: revisa tu correo, tu código −20% va de camino. 📬",
     onFirstOrder: "en tu primer pedido",
-    until: "hasta el",
     emailPlaceholder: "tu@email.com",
     yourEmail: "Tu email",
     sending: "Enviando…",
     wantMyCode: "Quiero mi código",
-    privacyPolicy: "Política de privacidad",
     invalidEmail: "Ese email no parece válido.",
     rateLimited: "Demasiados intentos, prueba en un rato.",
     genericError: "No se pudo completar el alta. Inténtalo de nuevo.",
@@ -147,9 +145,6 @@ const es = {
     appliedDescription: "Verás el descuento en tu carrito y en el checkout.",
     savedTitle: "Código {code} guardado",
     savedDescription: "Se aplicará automáticamente a tu carrito.",
-  },
-  consent: {
-    text: "Quiero recibir por email mi código de bienvenida y las novedades y ofertas de Paat Jumps. He leído y acepto la política de privacidad.",
   },
 };
 
@@ -281,12 +276,10 @@ const en = {
     ariaLabel: "Launch offer",
     success: "Done — check your inbox, your −20% code is on its way. 📬",
     onFirstOrder: "off your first order",
-    until: "until",
     emailPlaceholder: "you@email.com",
     yourEmail: "Your email",
     sending: "Sending…",
     wantMyCode: "Get my code",
-    privacyPolicy: "Privacy policy",
     invalidEmail: "That email doesn't look valid.",
     rateLimited: "Too many attempts, try again in a bit.",
     genericError: "We couldn't complete the signup. Please try again.",
@@ -297,9 +290,6 @@ const en = {
     appliedDescription: "You'll see the discount in your cart and at checkout.",
     savedTitle: "Code {code} saved",
     savedDescription: "It will be applied to your cart automatically.",
-  },
-  consent: {
-    text: "I want to receive my welcome code plus Paat Jumps news and offers by email. I have read and accept the privacy policy.",
   },
 };
 

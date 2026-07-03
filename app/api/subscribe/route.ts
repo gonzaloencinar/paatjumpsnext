@@ -100,7 +100,6 @@ export async function POST(request: Request) {
         .update({
           status: "subscribed",
           consent: true,
-          consent_text: CRM.consentText,
           consent_at: new Date().toISOString(),
           consent_ip: ip,
         })
@@ -120,7 +119,6 @@ export async function POST(request: Request) {
         status: "subscribed",
         source: "sticky_bar",
         consent: true,
-        consent_text: CRM.consentText,
         consent_at: new Date().toISOString(),
         consent_ip: ip,
       })
