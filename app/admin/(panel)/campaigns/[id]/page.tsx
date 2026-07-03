@@ -7,6 +7,7 @@ import { DeleteCampaignButton } from "@/components/admin/delete-campaign-button"
 import { PageHeader } from "@/components/admin/page-header";
 import { CampaignStatusBadge } from "@/components/admin/status-badges";
 import { Button } from "@/components/ui/button";
+import { parseFacets } from "@/lib/crm/segments";
 import {
   getCampaign,
   getCampaignAudienceCount,
@@ -28,7 +29,9 @@ export default async function CampaignDetailPage({
     campaign.status === "draft" || campaign.status === "scheduled";
   const [stats, audienceCount] = await Promise.all([
     getCampaignSendStats(id),
-    needsAudience ? getCampaignAudienceCount() : Promise.resolve(null),
+    needsAudience
+      ? getCampaignAudienceCount(parseFacets(campaign.segment))
+      : Promise.resolve(null),
   ]);
 
   return (

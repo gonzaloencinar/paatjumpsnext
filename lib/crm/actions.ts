@@ -5,6 +5,13 @@ import { redirect } from "next/navigation";
 import { effectiveSteps } from "@/lib/crm/automation-engine";
 import { mergeName } from "@/lib/crm/campaign-engine";
 import { isQuietHour, madridLocalToUtc } from "@/lib/crm/schedule";
+import {
+  countSegmentAudience,
+  describeFacets,
+  materializeCampaignAudience,
+  parseFacets,
+  type SegmentFacets,
+} from "@/lib/crm/segments";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
@@ -126,6 +133,31 @@ export async function setContactStatus(
   revalidatePath("/admin");
 }
 
+// Tags manuales (§16.2): agrupaciones libres tipo "club", "profe"…
+export async function setContactTags(
+  contactId: string,
+  tagsInput: string,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const tags = [
+    ...new Set(
+      tagsInput
+        .split(",")
+        .map((tag) => tag.trim().toLowerCase())
+        .filter((tag) => tag.length > 0 && tag.length <= 30),
+    ),
+  ].slice(0, 20);
+
+  const { error } = await supabase
+    .from("contacts")
+    .update({ tags })
+    .eq("id", contactId);
+  if (error) return { error: "No se pudieron guardar los tags." };
+  revalidatePath(`/admin/contacts/${contactId}`);
+  revalidatePath("/admin/contacts");
+  return { ok: true };
+}
+
 // ─────────────────────────── Campañas ───────────────────────────
 
 function campaignFields(formData: FormData) {
@@ -133,14 +165,47 @@ function campaignFields(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const preheader = String(formData.get("preheader") ?? "").trim();
   const bodyHtml = String(formData.get("body_html") ?? "").trim();
-  const segment = String(formData.get("segment") ?? "subscribed");
+  // Facetas del segmento (§16.2), serializadas por el picker del formulario
+  let segment: SegmentFacets = {};
+  try {
+    segment = parseFacets(
+      JSON.parse(String(formData.get("segment_json") ?? "{}")),
+    );
+  } catch {
+    segment = {};
+  }
   return {
     name,
     subject: subject || null,
     preheader: preheader || null,
     body_html: bodyHtml || null,
-    segment: { status: segment },
+    segment,
   };
+}
+
+// Recuento en vivo para el picker de segmento del formulario
+export async function countAudienceAction(
+  facets: SegmentFacets,
+): Promise<number> {
+  const supabase = await requireAdmin();
+  return countSegmentAudience(supabase, parseFacets(facets));
+}
+
+// "Crear campaña con este filtro" desde /admin/contacts
+export async function createCampaignFromFacets(facets: SegmentFacets) {
+  const supabase = await requireAdmin();
+  const clean = parseFacets(facets);
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      name: `Campaña — ${describeFacets(clean)}`,
+      segment: clean,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${data.id}`);
 }
 
 export async function createCampaign(
@@ -209,7 +274,6 @@ export async function deleteCampaign(campaignId: string) {
     .eq("id", campaignId);
   if (error) throw error;
   revalidatePath("/admin/campaigns");
-  redirect("/admin/campaigns");
 }
 
 // ───────────────────── Campañas: envío (§16.3) ─────────────────────
@@ -336,13 +400,15 @@ export async function sendCampaignNow(
   const invalid = notSendableError(campaign);
   if (invalid) return { error: invalid };
 
-  // Snapshot de destinatarios (idempotente) y a 'sending': el cron del
-  // minuto siguiente empieza a enviar por lotes.
-  const { error: materializeError } = await supabase.rpc(
-    "materialize_campaign",
-    { p_campaign_id: campaignId },
-  );
-  if (materializeError) {
+  // Snapshot de destinatarios del segmento (idempotente) y a 'sending': el
+  // cron del minuto siguiente empieza a enviar por lotes.
+  try {
+    await materializeCampaignAudience(
+      supabase,
+      campaignId,
+      parseFacets(campaign.segment),
+    );
+  } catch {
     return { error: "No se pudo preparar la lista de destinatarios." };
   }
 

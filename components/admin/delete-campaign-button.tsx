@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { deleteCampaign } from "@/lib/crm/actions";
@@ -18,6 +19,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 
 export function DeleteCampaignButton({ campaignId }: { campaignId: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -25,6 +27,7 @@ export function DeleteCampaignButton({ campaignId }: { campaignId: string }) {
     startTransition(async () => {
       try {
         await deleteCampaign(campaignId);
+        router.push("/admin/campaigns");
       } catch {
         toast.error("No se pudo eliminar la campaña");
       }

@@ -7,6 +7,8 @@ import {
   updateCampaign,
   type ActionState,
 } from "@/lib/crm/actions";
+import { SegmentPicker } from "@/components/admin/segment-picker";
+import { parseFacets } from "@/lib/crm/segments";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,24 +90,7 @@ export function CampaignForm({ campaign }: { campaign?: Campaign }) {
             </FieldDescription>
           </Field>
 
-          <Field>
-            <FieldLabel htmlFor="campaign-segment">Segmento</FieldLabel>
-            <select
-              id="campaign-segment"
-              name="segment"
-              defaultValue={
-                (campaign?.segment as { status?: string } | null)?.status ??
-                "subscribed"
-              }
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              <option value="subscribed">Todos los suscritos</option>
-            </select>
-            <FieldDescription>
-              Los emails en supresiones se excluyen siempre, elijas lo que
-              elijas.
-            </FieldDescription>
-          </Field>
+          <SegmentPicker defaultFacets={parseFacets(campaign?.segment)} />
 
           <Field>
             <FieldLabel htmlFor="campaign-body">Contenido (HTML)</FieldLabel>

@@ -30,21 +30,47 @@ const nf = new Intl.NumberFormat("es-ES");
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    page?: string;
+    tipo?: string;
+    actividad?: string;
+    fuente?: string;
+    alta?: string;
+    tag?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const { contacts, total, page, perPage } = await listContacts({
     q: sp.q,
     status: sp.status,
     page: Number(sp.page) || 1,
+    tipo: sp.tipo,
+    actividad: sp.actividad,
+    fuente: sp.fuente,
+    alta_dias: Number(sp.alta) || undefined,
+    tag: sp.tag,
   });
   const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const filtering = Boolean(sp.q || sp.status);
+  const filtering = Boolean(
+    sp.q || sp.status || sp.tipo || sp.actividad || sp.fuente || sp.alta ||
+      sp.tag,
+  );
 
   function pageUrl(p: number) {
     const params = new URLSearchParams();
-    if (sp.q) params.set("q", sp.q);
-    if (sp.status) params.set("status", sp.status);
+    for (const key of [
+      "q",
+      "status",
+      "tipo",
+      "actividad",
+      "fuente",
+      "alta",
+      "tag",
+    ] as const) {
+      if (sp[key]) params.set(key, sp[key]!);
+    }
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/admin/contacts${qs ? `?${qs}` : ""}`;
@@ -87,6 +113,9 @@ export default async function ContactsPage({
                     <TableHead>Estado</TableHead>
                     <TableHead className="hidden md:table-cell">
                       Origen
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Cliente
                     </TableHead>
                     <TableHead className="hidden text-right md:table-cell">
                       Alta

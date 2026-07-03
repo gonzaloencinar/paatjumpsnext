@@ -1,3 +1,7 @@
+import {
+  materializeCampaignAudience,
+  parseFacets,
+} from "@/lib/crm/segments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
@@ -46,20 +50,21 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
     completed: [],
   };
 
-  // 1) Programadas que ya tocan: materializar el snapshot y pasar a 'sending'.
-  //    materialize_campaign es idempotente (on conflict do nothing).
+  // 1) Programadas que ya tocan: materializar el snapshot del segmento y
+  //    pasar a 'sending' (idempotente: on conflict do nothing).
   const { data: due, error: dueError } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, segment")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString());
   if (dueError) throw dueError;
 
   for (const campaign of due ?? []) {
-    const { error } = await supabase.rpc("materialize_campaign", {
-      p_campaign_id: campaign.id,
-    });
-    if (error) throw error;
+    await materializeCampaignAudience(
+      supabase,
+      campaign.id,
+      parseFacets(campaign.segment),
+    );
     await supabase
       .from("campaigns")
       .update({ status: "sending" })

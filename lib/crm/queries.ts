@@ -1,3 +1,9 @@
+import {
+  ACTIVITY_DAYS,
+  countSegmentAudience,
+  VIP_MIN_DEFAULT,
+  type SegmentFacets,
+} from "@/lib/crm/segments";
 import { createClient } from "@/lib/supabase/server";
 
 export const CONTACTS_PER_PAGE = 25;
@@ -120,6 +126,11 @@ export async function listContacts(params: {
   q?: string;
   status?: string;
   page?: number;
+  tipo?: string;
+  actividad?: string;
+  fuente?: string;
+  alta_dias?: number;
+  tag?: string;
 }) {
   const supabase = await createClient();
   const page = Math.max(1, params.page ?? 1);
@@ -132,6 +143,37 @@ export async function listContacts(params: {
     .range(from, from + CONTACTS_PER_PAGE - 1);
 
   if (params.status) query = query.eq("status", params.status);
+
+  // Facetas §16.2 (mismas semánticas que lib/crm/segments.ts, pero sin fijar
+  // status: aquí se combinan con el filtro de estado que elija el admin)
+  if (params.tipo === "lead") query = query.eq("orders_count", 0);
+  if (params.tipo === "cliente") query = query.gte("orders_count", 1);
+  if (params.tipo === "repetidor") query = query.gte("orders_count", 2);
+  if (params.tipo === "vip") {
+    query = query.gte("total_spent", VIP_MIN_DEFAULT);
+  }
+  const activityIso = new Date(
+    Date.now() - ACTIVITY_DAYS * 86_400_000,
+  ).toISOString();
+  if (params.actividad === "activos") {
+    query = query.or(
+      `last_open_at.gte.${activityIso},last_click_at.gte.${activityIso}`,
+    );
+  }
+  if (params.actividad === "dormidos") {
+    query = query
+      .or(`last_open_at.is.null,last_open_at.lt.${activityIso}`)
+      .or(`last_click_at.is.null,last_click_at.lt.${activityIso}`);
+  }
+  if (params.fuente) query = query.eq("source", params.fuente);
+  if (params.alta_dias && params.alta_dias > 0) {
+    query = query.gte(
+      "created_at",
+      new Date(Date.now() - params.alta_dias * 86_400_000).toISOString(),
+    );
+  }
+  if (params.tag) query = query.contains("tags", [params.tag.toLowerCase()]);
+
   if (params.q) {
     // PostgREST usa comas como separador dentro de or(): sanear
     const q = params.q
@@ -216,11 +258,11 @@ export async function getCampaign(id: string) {
   return data;
 }
 
-// Segmento v1 = suscritos menos supresiones (RPC count_campaign_audience)
-export async function getCampaignAudienceCount() {
+// Recuento de la audiencia de un segmento (facetas §16.2; {} = todos los
+// suscritos). Se usa en la ficha de campaña y en el editor de secuencias.
+export async function getCampaignAudienceCount(facets: SegmentFacets = {}) {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("count_campaign_audience");
-  return data ?? 0;
+  return countSegmentAudience(supabase, facets);
 }
 
 export type CampaignSendStats = {
