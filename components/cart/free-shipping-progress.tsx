@@ -34,8 +34,7 @@ export function FreeShippingProgress({
           <span className="font-semibold text-orange-500">
             {formattedRemaining}
           </span>{" "}
-          para conseguir el{" "}
-          <span className="font-semibold">envío gratis</span>.
+          para conseguir el <span className="font-semibold">envío gratis</span>.
         </p>
       )}
 

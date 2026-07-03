@@ -148,6 +148,22 @@ export type ShopifyCreateCartOperation = {
   data: { cartCreate: { cart: ShopifyCart } };
 };
 
+export type ShopifyApplyDiscountOperation = {
+  data: {
+    cartDiscountCodesUpdate: {
+      cart: {
+        id: string;
+        discountCodes: { code: string; applicable: boolean }[];
+      } | null;
+      userErrors: { field: string[] | null; message: string }[];
+    };
+  };
+  variables: {
+    cartId: string;
+    discountCodes: string[];
+  };
+};
+
 export type ShopifyAddToCartOperation = {
   data: {
     cartLinesAdd: {

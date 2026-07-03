@@ -1,0 +1,157 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  BanIcon,
+  ChevronsUpDownIcon,
+  LayoutDashboardIcon,
+  LogOutIcon,
+  SendIcon,
+  StoreIcon,
+  TicketPercentIcon,
+  UsersIcon,
+  WorkflowIcon,
+} from "lucide-react";
+import LogoIcon from "components/icons/logo";
+import { logout } from "@/app/admin/login/actions";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from "@/components/ui/sidebar";
+
+const NAV = [
+  { title: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
+  { title: "Contactos", href: "/admin/contacts", icon: UsersIcon },
+  { title: "Campañas", href: "/admin/campaigns", icon: SendIcon },
+  { title: "Promociones", href: "/admin/promotions", icon: TicketPercentIcon },
+  { title: "Automatizaciones", href: "/admin/automations", icon: WorkflowIcon },
+  { title: "Supresiones", href: "/admin/suppressions", icon: BanIcon },
+];
+
+export function AppSidebar({ email }: { email: string }) {
+  const pathname = usePathname();
+
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <Link href="/admin" aria-label="Dashboard del CRM">
+            <LogoIcon aria-hidden className="h-5 w-auto" />
+          </Link>
+          <Badge variant="secondary">CRM</Badge>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Marketing</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {NAV.map((item) => {
+                const active =
+                  item.href === "/admin"
+                    ? pathname === "/admin"
+                    : pathname.startsWith(item.href);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      isActive={active}
+                      render={<Link href={item.href} />}
+                    >
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Atajos</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={
+                    <a href="/" target="_blank" rel="noreferrer noopener" />
+                  }
+                >
+                  <StoreIcon />
+                  <span>Ver la tienda</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton size="lg">
+                    <Avatar className="size-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg uppercase">
+                        {email.slice(0, 2) || "PJ"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex min-w-0 flex-col text-left leading-tight">
+                      <span className="text-xs font-medium">Admin</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {email}
+                      </span>
+                    </div>
+                    <ChevronsUpDownIcon className="ml-auto" />
+                  </SidebarMenuButton>
+                }
+              />
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                className="w-(--anchor-width)"
+              >
+                <DropdownMenuLabel className="truncate">
+                  {email}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => void logout()}>
+                    <LogOutIcon />
+                    Cerrar sesión
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
+  );
+}

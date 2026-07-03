@@ -43,3 +43,21 @@ export const removeFromCartMutation = /* GraphQL */ `
   }
   ${cartFragment}
 `;
+
+export const applyDiscountMutation = /* GraphQL */ `
+  mutation cartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]) {
+    cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $discountCodes) {
+      cart {
+        id
+        discountCodes {
+          code
+          applicable
+        }
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;

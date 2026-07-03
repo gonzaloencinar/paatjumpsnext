@@ -3,6 +3,7 @@
 import { TAGS } from "lib/constants";
 import {
   addToCart,
+  applyCartDiscount,
   createCart,
   getCart,
   removeFromCart,
@@ -14,7 +15,7 @@ import { redirect } from "next/navigation";
 
 export async function addItem(
   prevState: any,
-  selectedVariantId: string | undefined
+  selectedVariantId: string | undefined,
 ) {
   if (!selectedVariantId) {
     return "Error adding item to cart";
@@ -37,7 +38,7 @@ export async function removeItem(prevState: any, merchandiseId: string) {
     }
 
     const lineItem = cart.lines.find(
-      (line) => line.merchandise.id === merchandiseId
+      (line) => line.merchandise.id === merchandiseId,
     );
 
     if (lineItem && lineItem.id) {
@@ -56,7 +57,7 @@ export async function updateItemQuantity(
   payload: {
     merchandiseId: string;
     quantity: number;
-  }
+  },
 ) {
   const { merchandiseId, quantity } = payload;
 
@@ -68,7 +69,7 @@ export async function updateItemQuantity(
     }
 
     const lineItem = cart.lines.find(
-      (line) => line.merchandise.id === merchandiseId
+      (line) => line.merchandise.id === merchandiseId,
     );
 
     if (lineItem && lineItem.id) {
@@ -102,5 +103,47 @@ export async function redirectToCheckout() {
 
 export async function createCartAndSetCookie() {
   let cart = await createCart();
-  (await cookies()).set("cartId", cart.id!);
+  const cookieStore = await cookies();
+  cookieStore.set("cartId", cart.id!);
+  // Si hay un código de descuento pendiente (link del email), aplicarlo al
+  // carrito recién creado.
+  const pending = cookieStore.get(DISCOUNT_COOKIE)?.value;
+  if (pending) {
+    try {
+      await applyCartDiscount([pending]);
+    } catch {
+      // El código sigue en la cookie; el cliente puede pegarlo en el checkout.
+    }
+  }
+}
+
+const DISCOUNT_COOKIE = "pj_discount";
+
+export async function applyDiscountCode(rawCode: string) {
+  const code = rawCode.trim().toUpperCase().slice(0, 40);
+  if (!/^[A-Z0-9-]{4,}$/.test(code)) {
+    return { applied: false, saved: false, code };
+  }
+
+  const cookieStore = await cookies();
+  // Persistir 35 días: si el carrito caduca o aún no existe, se re-aplica al
+  // crearlo (createCartAndSetCookie).
+  cookieStore.set(DISCOUNT_COOKIE, code, {
+    maxAge: 60 * 60 * 24 * 35,
+    path: "/",
+  });
+
+  let cart = await getCart();
+  if (!cart) {
+    cart = await createCart();
+    cookieStore.set("cartId", cart.id!);
+  }
+
+  try {
+    const applied = await applyCartDiscount([code]);
+    updateTag(TAGS.cart);
+    return { applied, saved: true, code };
+  } catch {
+    return { applied: false, saved: true, code };
+  }
 }

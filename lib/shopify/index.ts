@@ -14,6 +14,7 @@ import { cookies, headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import {
   addToCartMutation,
+  applyDiscountMutation,
   createCartMutation,
   editCartItemsMutation,
   removeFromCartMutation,
@@ -42,6 +43,7 @@ import {
   Page,
   Product,
   ShopifyAddToCartOperation,
+  ShopifyApplyDiscountOperation,
   ShopifyCart,
   ShopifyCartOperation,
   ShopifyCollection,
@@ -271,6 +273,22 @@ export async function updateCart(
   });
 
   return reshapeCart(res.body.data.cartLinesUpdate.cart);
+}
+
+// Aplica códigos de descuento al carrito (cartDiscountCodesUpdate). El
+// descuento se refleja en los totales y se hereda en checkoutUrl (plan §8).
+// Devuelve true si Shopify considera el código aplicable.
+export async function applyCartDiscount(
+  discountCodes: string[],
+): Promise<boolean> {
+  const cartId = (await cookies()).get("cartId")?.value;
+  if (!cartId) return false;
+  const res = await shopifyFetch<ShopifyApplyDiscountOperation>({
+    query: applyDiscountMutation,
+    variables: { cartId, discountCodes },
+  });
+  const codes = res.body.data.cartDiscountCodesUpdate.cart?.discountCodes ?? [];
+  return codes.some((entry) => entry.applicable);
 }
 
 export async function getCart(): Promise<Cart | undefined> {
