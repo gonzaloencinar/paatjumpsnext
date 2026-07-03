@@ -5,9 +5,9 @@ import type { Locale } from "./config";
 // content itself comes translated from Shopify via @inContext + Translate & Adapt.
 const es = {
   home: {
-    metaTitle: "Combas de saltar profesionales hechas a mano",
+    metaTitle: "Tienda de combas profesionales",
     metaDescription:
-      "Combas segmentadas y PVC hechas a mano en España. Cuerda de 4 mm para más control: aprende, entrena y haz trucos. Envío gratis a Península y Baleares.",
+      "Tienda de combas de saltar profesionales hechas a mano en España: segmentadas y PVC de 4 mm para más control. Elige la tuya. Envío gratis a Península y Baleares.",
   },
   hero: {
     titleLine1: "No todas las combas",
@@ -87,9 +87,9 @@ const es = {
     soldOutSuffix: "(Agotado)",
   },
   search: {
-    metaTitle: "Todas las combas",
+    metaTitle: "Comprar combas - Elige la tuya",
     metaDescription:
-      "Explora todas las combas de saltar Paat Jumps: segmentadas (beaded) y PVC de velocidad, hechas a mano en España. Filtra por tipo, color y precio.",
+      "Compra tu comba de saltar Paat Jumps: segmentadas (beaded) y PVC de velocidad, hechas a mano en España. Filtra por tipo, color y precio y elige la tuya.",
     h1: "Todas las combas",
     intro:
       "Combas segmentadas y combas PVC de velocidad, montadas a mano en España.",
@@ -216,9 +216,9 @@ const es = {
 
 const en = {
   home: {
-    metaTitle: "Handmade Beaded & PVC Jump Ropes",
+    metaTitle: "Professional Jump Ropes Store",
     metaDescription:
-      "Professional beaded and PVC jump ropes handmade in Spain. A thick 4 mm cord for control: learn, train and do tricks. Fast shipping across Europe.",
+      "Shop professional jump ropes handmade in Spain: beaded and PVC with a thick 4 mm cord for control. Find yours and start jumping — fast shipping across Europe.",
   },
   hero: {
     titleLine1: "Not all jump ropes",
@@ -298,9 +298,9 @@ const en = {
     soldOutSuffix: "(Sold out)",
   },
   search: {
-    metaTitle: "All Jump Ropes",
+    metaTitle: "Shop Jump Ropes - Find Yours",
     metaDescription:
-      "Browse every Paat Jumps jump rope: beaded ropes and PVC speed ropes, handmade in Spain. Filter by type, color and price.",
+      "Shop Paat Jumps jump ropes: beaded ropes and PVC speed ropes, handmade in Spain. Filter by type, color and price, and find the one for you.",
     h1: "All jump ropes",
     intro: "Beaded jump ropes and PVC speed ropes, hand-assembled in Spain.",
     noResultsFor: "There are no ropes matching",
