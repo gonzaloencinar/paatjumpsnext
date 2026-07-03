@@ -7,7 +7,7 @@ cuentas** (mono o bicolor), para lanzar colores nuevos sin repetir el set de fot
   brillante sobre cable de acero negro, dos mangos de aluminio negro mate con el wordmark
   blanco en script **"Paat Jumps"**, fondo carbón con viñeta.
 - **Modelo:** `gpt-image-2-image-to-image` (el último de OpenAI en kie.ai — confirmado: lo
-  llaman *GPT Image 2* en el market) en modo **image-to-image / edición**.
+  llaman _GPT Image 2_ en el market) en modo **image-to-image / edición**.
 - **Salida:** 2 estilos por color (los que haya en `public/fotos_producto_referencia/`).
 
 ---
@@ -21,10 +21,10 @@ más fiel que describir la escena con palabras y generarla de cero.
 
 Cada imagen de referencia = un **estilo**. Se descubren solas, así que da igual que sean 2 o 3:
 
-| Fichero de referencia            | Estilo                         |
-| -------------------------------- | ------------------------------ |
-| `fotoProductoPrincipal.PNG`      | Packshot cenital (flat-lay)    |
-| `fotoProductoSecundaria.PNG`     | Macro de detalle de los mangos |
+| Fichero de referencia        | Estilo                         |
+| ---------------------------- | ------------------------------ |
+| `fotoProductoPrincipal.PNG`  | Packshot cenital (flat-lay)    |
+| `fotoProductoSecundaria.PNG` | Macro de detalle de los mangos |
 
 > El "prompt maestro" (descripción completa de la escena) y las notas por estilo viven en
 > [`prompts.mjs`](./prompts.mjs), por si algún día quieres generar desde cero (text-to-image).
@@ -43,7 +43,7 @@ Cada imagen de referencia = un **estilo**. Se descubren solas, así que da igual
 > reflections and shadows EXACTLY as they are in the reference image. Do NOT alter the handles,
 > the logo or any text. Photorealistic result, identical to the original except for the bead colour.
 
-En **mono** cambia a *"recolour ALL the cylindrical beads to a single uniform colour {COLOR_A}"*.
+En **mono** cambia a _"recolour ALL the cylindrical beads to a single uniform colour {COLOR_A}"_.
 
 ---
 
@@ -61,11 +61,11 @@ En **mono** cambia a *"recolour ALL the cylindrical beads to a single uniform co
 
 Endpoints (base `https://api.kie.ai`):
 
-| Paso     | Método y ruta                          | Campo clave de respuesta        |
-| -------- | -------------------------------------- | ------------------------------- |
-| Subir    | `POST /api/file-base64-upload`         | `data.downloadUrl`              |
-| Crear    | `POST /api/v1/jobs/createTask`         | `data.taskId`                   |
-| Consultar| `GET  /api/v1/jobs/recordInfo?taskId=` | `data.state`, `data.resultJson` |
+| Paso      | Método y ruta                          | Campo clave de respuesta        |
+| --------- | -------------------------------------- | ------------------------------- |
+| Subir     | `POST /api/file-base64-upload`         | `data.downloadUrl`              |
+| Crear     | `POST /api/v1/jobs/createTask`         | `data.taskId`                   |
+| Consultar | `GET  /api/v1/jobs/recordInfo?taskId=` | `data.state`, `data.resultJson` |
 
 ---
 
@@ -106,18 +106,18 @@ El color admite **texto libre** ("verde lima neón", "negro mate") o **hex** ("#
 
 ### Flags
 
-| Flag                   | Descripción                                              | Default |
-| ---------------------- | ------------------------------------------------------- | ------- |
-| `--color "<c>"`        | Monocolor                                               | —       |
-| `--colors "<A>, <B>"`  | Bicolor (alternado)                                     | —       |
-| `--style <txt>`        | Filtra estilo por substring (`principal`, `secundaria`) | todos   |
-| `--variants <n>`       | Variantes por estilo                                    | 1       |
-| `--resolution <1K\|2K>`| Resolución de salida (1:1 no admite 4K)                 | 2K      |
-| `--aspect <ratio>`     | Relación de aspecto                                     | 1:1     |
-| `--quality <1-100>`    | Calidad JPEG de la referencia comprimida                | 90      |
-| `--max <px>`           | Lado mayor de la referencia comprimida                  | 1024    |
-| `--no-compress`        | Sube la referencia original sin comprimir               | off     |
-| `--dry-run`            | Imprime plan + prompts, no llama a la API               | off     |
+| Flag                    | Descripción                                             | Default |
+| ----------------------- | ------------------------------------------------------- | ------- |
+| `--color "<c>"`         | Monocolor                                               | —       |
+| `--colors "<A>, <B>"`   | Bicolor (alternado)                                     | —       |
+| `--style <txt>`         | Filtra estilo por substring (`principal`, `secundaria`) | todos   |
+| `--variants <n>`        | Variantes por estilo                                    | 1       |
+| `--resolution <1K\|2K>` | Resolución de salida (1:1 no admite 4K)                 | 2K      |
+| `--aspect <ratio>`      | Relación de aspecto                                     | 1:1     |
+| `--quality <1-100>`     | Calidad JPEG de la referencia comprimida                | 90      |
+| `--max <px>`            | Lado mayor de la referencia comprimida                  | 1024    |
+| `--no-compress`         | Sube la referencia original sin comprimir               | off     |
+| `--dry-run`             | Imprime plan + prompts, no llama a la API               | off     |
 
 ### Salida
 

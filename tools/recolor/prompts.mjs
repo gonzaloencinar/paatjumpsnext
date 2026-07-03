@@ -69,7 +69,13 @@ const BEAD_FINISH =
  * @param {string} [opts.colorB] segundo color (solo bicolor)
  * @returns {string}
  */
-export function buildRecolorPrompt({ mode, colorA, colorB, finish, colorRefNote }) {
+export function buildRecolorPrompt({
+  mode,
+  colorA,
+  colorB,
+  finish,
+  colorRefNote,
+}) {
   const fin = finish || BEAD_FINISH; // permite override por color (p.ej. negro mate)
   const ref = colorRefNote ? [colorRefNote] : []; // guía de color por imagen de referencia extra
   if (mode === "bicolor") {

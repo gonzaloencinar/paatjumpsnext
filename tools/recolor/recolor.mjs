@@ -38,7 +38,8 @@ const OUT_DIR = path.join(__dirname, "resultados");
 
 const KIE_BASE = process.env.KIE_BASE_URL || "https://api.kie.ai";
 // El servicio de subida de ficheros vive en otro host (devuelve URLs tempfile.redpandaai.co)
-const KIE_FILE_BASE = process.env.KIE_FILE_BASE_URL || "https://kieai.redpandaai.co";
+const KIE_FILE_BASE =
+  process.env.KIE_FILE_BASE_URL || "https://kieai.redpandaai.co";
 const UPLOAD_URL = `${KIE_FILE_BASE}/api/file-base64-upload`;
 const CREATE_URL = `${KIE_BASE}/api/v1/jobs/createTask`;
 const RECORD_URL = `${KIE_BASE}/api/v1/jobs/recordInfo`;
@@ -80,24 +81,56 @@ function loadDotEnv() {
 }
 
 function parseArgs(argv) {
-  const out = { variants: 1, resolution: "2K", aspect: "1:1", quality: 90, max: 1024 };
+  const out = {
+    variants: 1,
+    resolution: "2K",
+    aspect: "1:1",
+    quality: 90,
+    max: 1024,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
     switch (a) {
-      case "--color": out.color = next(); break;          // mono
-      case "--colors": out.colors = next(); break;        // "A, B" bicolor
-      case "--finish": out.finish = next(); break;        // override del acabado de cuentas (p.ej. negro mate)
-      case "--style": out.style = next(); break;          // substring: principal | secundaria | all
-      case "--variants": out.variants = Math.max(1, parseInt(next(), 10) || 1); break;
-      case "--resolution": out.resolution = next(); break; // 1K | 2K
-      case "--aspect": out.aspect = next(); break;
-      case "--quality": out.quality = parseInt(next(), 10) || 90; break;
-      case "--max": out.max = parseInt(next(), 10) || 1024; break;
-      case "--no-compress": out.noCompress = true; break;
-      case "--dry-run": out.dryRun = true; break;
-      case "-h": case "--help": out.help = true; break;
-      default: warn(`flag desconocido ignorado: ${a}`);
+      case "--color":
+        out.color = next();
+        break; // mono
+      case "--colors":
+        out.colors = next();
+        break; // "A, B" bicolor
+      case "--finish":
+        out.finish = next();
+        break; // override del acabado de cuentas (p.ej. negro mate)
+      case "--style":
+        out.style = next();
+        break; // substring: principal | secundaria | all
+      case "--variants":
+        out.variants = Math.max(1, parseInt(next(), 10) || 1);
+        break;
+      case "--resolution":
+        out.resolution = next();
+        break; // 1K | 2K
+      case "--aspect":
+        out.aspect = next();
+        break;
+      case "--quality":
+        out.quality = parseInt(next(), 10) || 90;
+        break;
+      case "--max":
+        out.max = parseInt(next(), 10) || 1024;
+        break;
+      case "--no-compress":
+        out.noCompress = true;
+        break;
+      case "--dry-run":
+        out.dryRun = true;
+        break;
+      case "-h":
+      case "--help":
+        out.help = true;
+        break;
+      default:
+        warn(`flag desconocido ignorado: ${a}`);
     }
   }
   return out;
@@ -135,18 +168,32 @@ function authHeaders() {
 }
 
 async function kiePost(url, body) {
-  const res = await fetch(url, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
   const text = await res.text();
   let json;
-  try { json = JSON.parse(text); } catch { json = { raw: text }; }
-  if (!res.ok) throw new Error(`POST ${url} → HTTP ${res.status}: ${text.slice(0, 300)}`);
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = { raw: text };
+  }
+  if (!res.ok)
+    throw new Error(`POST ${url} → HTTP ${res.status}: ${text.slice(0, 300)}`);
   return json;
 }
 
 async function uploadBase64(filePath) {
   const buf = await readFile(filePath);
   const ext = path.extname(filePath).toLowerCase();
-  const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  const mime =
+    ext === ".png"
+      ? "image/png"
+      : ext === ".webp"
+        ? "image/webp"
+        : "image/jpeg";
   const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
   const json = await kiePost(UPLOAD_URL, {
     base64Data: dataUrl,
@@ -154,7 +201,10 @@ async function uploadBase64(filePath) {
     fileName: path.basename(filePath),
   });
   const url = json?.data?.downloadUrl || json?.data?.url || json?.data?.fileUrl;
-  if (!url) throw new Error(`upload sin downloadUrl: ${JSON.stringify(json).slice(0, 300)}`);
+  if (!url)
+    throw new Error(
+      `upload sin downloadUrl: ${JSON.stringify(json).slice(0, 300)}`,
+    );
   return url;
 }
 
@@ -164,24 +214,38 @@ async function createTask(prompt, inputUrls, { resolution, aspect }) {
     input: { prompt, input_urls: inputUrls, aspect_ratio: aspect, resolution },
   });
   const taskId = json?.data?.taskId || json?.data?.task_id;
-  if (!taskId) throw new Error(`createTask sin taskId: ${JSON.stringify(json).slice(0, 300)}`);
+  if (!taskId)
+    throw new Error(
+      `createTask sin taskId: ${JSON.stringify(json).slice(0, 300)}`,
+    );
   return taskId;
 }
 
 async function pollTask(taskId) {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const res = await fetch(`${RECORD_URL}?taskId=${encodeURIComponent(taskId)}`, { headers: authHeaders() });
+    const res = await fetch(
+      `${RECORD_URL}?taskId=${encodeURIComponent(taskId)}`,
+      { headers: authHeaders() },
+    );
     const json = await res.json().catch(() => ({}));
     const d = json?.data || {};
     const state = d.state;
     if (state === "success") {
       let urls = [];
-      try { urls = JSON.parse(d.resultJson || "{}").resultUrls || []; } catch {}
-      if (!urls.length) throw new Error(`success sin resultUrls: ${JSON.stringify(d).slice(0, 300)}`);
+      try {
+        urls = JSON.parse(d.resultJson || "{}").resultUrls || [];
+      } catch {}
+      if (!urls.length)
+        throw new Error(
+          `success sin resultUrls: ${JSON.stringify(d).slice(0, 300)}`,
+        );
       return urls;
     }
-    if (state === "fail") throw new Error(`task fail [${d.failCode || "?"}]: ${d.failMsg || "sin mensaje"}`);
+    if (state === "fail")
+      throw new Error(
+        `task fail [${d.failCode || "?"}]: ${d.failMsg || "sin mensaje"}`,
+      );
     process.stdout.write(`   …${state || "?"}\r`);
     await sleep(POLL_INTERVAL_MS);
   }
@@ -196,14 +260,24 @@ async function compressRef(srcPath, { quality, max }) {
     .update(`${srcPath}:${st.mtimeMs}:${st.size}:${max}:${quality}`)
     .digest("hex")
     .slice(0, 12);
-  const outPath = path.join(CACHE_DIR, `${path.parse(srcPath).name}.${key}.jpg`);
+  const outPath = path.join(
+    CACHE_DIR,
+    `${path.parse(srcPath).name}.${key}.jpg`,
+  );
   if (existsSync(outPath)) return outPath;
   // sips: redimensiona el lado mayor a `max` y convierte a JPEG con la calidad dada
   await execFileP("sips", [
-    "-Z", String(max),
-    "-s", "format", "jpeg",
-    "-s", "formatOptions", String(quality),
-    srcPath, "--out", outPath,
+    "-Z",
+    String(max),
+    "-s",
+    "format",
+    "jpeg",
+    "-s",
+    "formatOptions",
+    String(quality),
+    srcPath,
+    "--out",
+    outPath,
   ]);
   return outPath;
 }
@@ -211,11 +285,18 @@ async function compressRef(srcPath, { quality, max }) {
 function readUploadCache() {
   const p = path.join(CACHE_DIR, "uploads.json");
   if (!existsSync(p)) return {};
-  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return {}; }
+  try {
+    return JSON.parse(readFileSync(p, "utf8"));
+  } catch {
+    return {};
+  }
 }
 async function writeUploadCache(cache) {
   await mkdir(CACHE_DIR, { recursive: true });
-  await writeFile(path.join(CACHE_DIR, "uploads.json"), JSON.stringify(cache, null, 2));
+  await writeFile(
+    path.join(CACHE_DIR, "uploads.json"),
+    JSON.stringify(cache, null, 2),
+  );
 }
 
 async function ensureUploaded(localPath, cache) {
@@ -231,19 +312,28 @@ async function ensureUploaded(localPath, cache) {
 
 // ── descubrimiento de estilos ────────────────────────────────────────────────
 async function discoverStyles(filter) {
-  if (!existsSync(REF_DIR)) die(`no existe la carpeta de referencias: ${REF_DIR}`);
+  if (!existsSync(REF_DIR))
+    die(`no existe la carpeta de referencias: ${REF_DIR}`);
   const files = (await readdir(REF_DIR))
     .filter((f) => REF_EXT.has(path.extname(f).toLowerCase()))
     .sort();
   let styles = files.map((f) => {
     const key = path.parse(f).name.toLowerCase();
-    return { key, file: f, path: path.join(REF_DIR, f), label: STYLE_NOTES[key]?.label || key };
+    return {
+      key,
+      file: f,
+      path: path.join(REF_DIR, f),
+      label: STYLE_NOTES[key]?.label || key,
+    };
   });
   if (filter && filter !== "all") {
     const q = filter.toLowerCase();
     styles = styles.filter((s) => s.key.includes(q));
   }
-  if (!styles.length) die(`sin imágenes de referencia que coincidan con --style "${filter || "all"}"`);
+  if (!styles.length)
+    die(
+      `sin imágenes de referencia que coincidan con --style "${filter || "all"}"`,
+    );
   return styles;
 }
 
@@ -256,25 +346,41 @@ async function main() {
   // resolver modo/colores
   let mode, colorA, colorB;
   if (args.colors) {
-    const parts = args.colors.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length < 2) die(`--colors necesita dos colores separados por coma, p.ej. --colors "rojo, negro"`);
-    mode = "bicolor"; [colorA, colorB] = parts;
+    const parts = args.colors
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length < 2)
+      die(
+        `--colors necesita dos colores separados por coma, p.ej. --colors "rojo, negro"`,
+      );
+    mode = "bicolor";
+    [colorA, colorB] = parts;
   } else if (args.color) {
-    mode = "mono"; colorA = args.color.trim();
+    mode = "mono";
+    colorA = args.color.trim();
   } else {
     printHelp();
-    die("indica un color: --color \"<color>\"  o  --colors \"<A>, <B>\"");
+    die('indica un color: --color "<color>"  o  --colors "<A>, <B>"');
   }
 
-  const prompt = buildRecolorPrompt({ mode, colorA, colorB, finish: args.finish });
+  const prompt = buildRecolorPrompt({
+    mode,
+    colorA,
+    colorB,
+    finish: args.finish,
+  });
   const colorLabel = mode === "bicolor" ? `${colorA} + ${colorB}` : colorA;
-  const colorSlug = mode === "bicolor" ? `${slug(colorA)}-${slug(colorB)}` : slug(colorA);
+  const colorSlug =
+    mode === "bicolor" ? `${slug(colorA)}-${slug(colorB)}` : slug(colorA);
   const styles = await discoverStyles(args.style);
 
   log(`\n● Producto: comba con cuentas Paat Jumps`);
   log(`● Color   : ${colorLabel}  (${mode})`);
   log(`● Estilos : ${styles.map((s) => s.label).join("  |  ")}`);
-  log(`● Salida  : ${args.resolution} ${args.aspect} · ${args.variants} variante(s)/estilo`);
+  log(
+    `● Salida  : ${args.resolution} ${args.aspect} · ${args.variants} variante(s)/estilo`,
+  );
   log(`\n── prompt operativo (image-to-image) ──\n${prompt}\n`);
 
   if (args.dryRun) {
@@ -286,7 +392,9 @@ async function main() {
   }
 
   if (!process.env.KIE_API_KEY) {
-    die(`falta KIE_API_KEY. Ponla en tools/recolor/.env  (copia .env.example)  o expórtala en el entorno.`);
+    die(
+      `falta KIE_API_KEY. Ponla en tools/recolor/.env  (copia .env.example)  o expórtala en el entorno.`,
+    );
   }
 
   const outDir = path.join(OUT_DIR, colorSlug);
@@ -296,7 +404,9 @@ async function main() {
   // 1) comprimir + subir referencias (una sola vez por estilo)
   log("Subiendo referencias…");
   for (const s of styles) {
-    const local = args.noCompress ? s.path : await compressRef(s.path, { quality: args.quality, max: args.max });
+    const local = args.noCompress
+      ? s.path
+      : await compressRef(s.path, { quality: args.quality, max: args.max });
     if (!args.noCompress) {
       const kb = (statSync(local).size / 1024).toFixed(0);
       log(`  • ${s.key}: comprimida → ${kb} KB`);
@@ -312,12 +422,17 @@ async function main() {
       const tag = args.variants > 1 ? `${s.key}-v${v}` : s.key;
       log(`\n► Generando ${tag} …`);
       try {
-        const taskId = await createTask(prompt, [s.url], { resolution: args.resolution, aspect: args.aspect });
+        const taskId = await createTask(prompt, [s.url], {
+          resolution: args.resolution,
+          aspect: args.aspect,
+        });
         log(`   taskId=${taskId}`);
         const urls = await pollTask(taskId);
         for (let k = 0; k < urls.length; k++) {
           const suffix = urls.length > 1 ? `-${k + 1}` : "";
-          const ext = (urls[k].match(/\.(png|jpe?g|webp)(?:\?|$)/i)?.[1] || "png").toLowerCase();
+          const ext = (
+            urls[k].match(/\.(png|jpe?g|webp)(?:\?|$)/i)?.[1] || "png"
+          ).toLowerCase();
           const dest = path.join(outDir, `${tag}${suffix}.${ext}`);
           const img = Buffer.from(await (await fetch(urls[k])).arrayBuffer());
           await writeFile(dest, img);
@@ -330,7 +445,9 @@ async function main() {
     }
   }
 
-  log(`\n✅ Listo. ${results.length} imagen(es) en ${path.relative(ROOT, outDir)}/`);
+  log(
+    `\n✅ Listo. ${results.length} imagen(es) en ${path.relative(ROOT, outDir)}/`,
+  );
   if (!results.length) process.exit(1);
 }
 
