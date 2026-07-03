@@ -1,11 +1,15 @@
 import { browsePath, categoryPath, productPath } from "lib/i18n/routes";
-import { getCollections, getPages, getProducts } from "lib/shopify";
+import { getAllProductsForSitemap, getCollections, getPages } from "lib/shopify";
 import { baseUrl, validateEnvironmentVariables } from "lib/utils";
 import { MetadataRoute } from "next";
 
 type Route = MetadataRoute.Sitemap[number];
 
-export const dynamic = "force-dynamic";
+// Regenerate hourly (ISR) instead of on every request. The underlying Shopify
+// data is cached with `"use cache"` and invalidated by the product/collection
+// webhooks, so new products still appear promptly — but a momentary Shopify
+// hiccup no longer turns a live request into a 500 ("couldn't fetch" in GSC).
+export const revalidate = 3600;
 
 // Spanish lives at the root, English under /en. Home and static pages share the
 // same slug in both languages, so /en is a plain prefix here.
@@ -57,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ),
   );
 
-  const productsPromise = getProducts({}).then((products) =>
+  const productsPromise = getAllProductsForSitemap().then((products) =>
     products.flatMap((product) =>
       altPair(
         productPath("es", product.handle),

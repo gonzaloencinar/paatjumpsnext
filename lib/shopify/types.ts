@@ -344,6 +344,18 @@ export type ShopifyProductsOperation = {
   };
 };
 
+export type ShopifyProductsSitemapOperation = {
+  data: {
+    products: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      edges: {
+        node: { handle: string; updatedAt: string; tags: string[] };
+      }[];
+    };
+  };
+  variables: { after?: string };
+};
+
 export type ShopifySearchProductsOperation = {
   data: {
     search: {

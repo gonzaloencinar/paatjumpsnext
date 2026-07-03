@@ -75,6 +75,27 @@ export const getSearchProductsFilteredQuery = /* GraphQL */ `
   ${productFragment}
 `;
 
+// Lightweight, paginated query for the sitemap: only the fields we emit
+// (`handle`, `updatedAt`) plus `tags` to drop hidden products, and `pageInfo`
+// to walk past the 250-per-page cap. Language-neutral, so no @inContext.
+export const getProductsSitemapQuery = /* GraphQL */ `
+  query getProductsSitemap($after: String) {
+    products(first: 250, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          handle
+          updatedAt
+          tags
+        }
+      }
+    }
+  }
+`;
+
 export const getProductRecommendationsQuery = /* GraphQL */ `
   query getProductRecommendations($productId: ID!, $language: LanguageCode)
   @inContext(language: $language) {

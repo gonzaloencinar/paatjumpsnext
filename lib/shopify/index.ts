@@ -40,6 +40,7 @@ import {
   getProductQuery,
   getProductRecommendationsQuery,
   getProductsQuery,
+  getProductsSitemapQuery,
   getSearchProductsFilteredQuery,
 } from "./queries/product";
 import {
@@ -69,6 +70,7 @@ import {
   ShopifyProductOperation,
   ShopifyProductRecommendationsOperation,
   ShopifyProductsOperation,
+  ShopifyProductsSitemapOperation,
   ShopifySearchProductsOperation,
   ShopifyRemoveFromCartOperation,
   ShopifyUpdateCartOperation,
@@ -629,6 +631,43 @@ export async function getProducts({
   });
 
   return reshapeProducts(removeEdgesAndNodes(res.body.data.products));
+}
+
+// Every published product's handle + updatedAt for the sitemap, paginated past
+// the 250-per-page Storefront cap so it never silently truncates as the catalog
+// grows. Hidden products (HIDDEN_PRODUCT_TAG) are dropped to mirror getProducts.
+export async function getAllProductsForSitemap(): Promise<
+  { handle: string; updatedAt: string }[]
+> {
+  "use cache";
+  cacheTag(TAGS.products);
+  cacheLife("days");
+
+  if (!endpoint) {
+    return [];
+  }
+
+  const products: { handle: string; updatedAt: string }[] = [];
+  let after: string | undefined;
+
+  do {
+    const res = await shopifyFetch<ShopifyProductsSitemapOperation>({
+      query: getProductsSitemapQuery,
+      variables: { after },
+    });
+    const connection = res.body.data.products;
+
+    for (const { node } of connection.edges) {
+      if (node.tags.includes(HIDDEN_PRODUCT_TAG)) continue;
+      products.push({ handle: node.handle, updatedAt: node.updatedAt });
+    }
+
+    after = connection.pageInfo.hasNextPage
+      ? (connection.pageInfo.endCursor ?? undefined)
+      : undefined;
+  } while (after);
+
+  return products;
 }
 
 // Faceted variant of `getProducts` for the search / "Todas" page. Uses the
