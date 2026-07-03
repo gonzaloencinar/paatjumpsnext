@@ -1,6 +1,10 @@
+"use client";
+
 import { QuickAddButton } from "components/cart/quick-add-button";
 import Grid from "components/grid";
 import { GridTileImage } from "components/grid/tile";
+import { useLocale } from "components/i18n/locale-context";
+import { localeHref } from "lib/i18n/config";
 import { Product } from "lib/shopify/types";
 import Link from "next/link";
 
@@ -9,13 +13,15 @@ export default function ProductGridItems({
 }: {
   products: Product[];
 }) {
+  const locale = useLocale();
+
   return (
     <>
       {products.map((product) => (
         <Grid.Item key={product.handle} className="relative animate-fadeIn">
           <Link
             className="relative inline-block h-full w-full"
-            href={`/product/${product.handle}`}
+            href={localeHref(locale, `/product/${product.handle}`)}
             prefetch={true}
           >
             <GridTileImage

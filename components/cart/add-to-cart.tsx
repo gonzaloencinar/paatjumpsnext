@@ -3,6 +3,7 @@
 import { PlusIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { addItem } from "components/cart/actions";
+import { useDictionary } from "components/i18n/locale-context";
 import { Product, ProductVariant } from "lib/shopify/types";
 import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
@@ -15,6 +16,7 @@ function SubmitButton({
   availableForSale: boolean;
   selectedVariantId: string | undefined;
 }) {
+  const t = useDictionary();
   const buttonClasses =
     "relative flex w-full items-center justify-center rounded-full bg-orange-600 p-4 tracking-wide text-white";
   const disabledClasses = "cursor-not-allowed opacity-60 hover:opacity-60";
@@ -22,7 +24,7 @@ function SubmitButton({
   if (!availableForSale) {
     return (
       <button disabled className={clsx(buttonClasses, disabledClasses)}>
-        Agotado
+        {t.cart.soldOut}
       </button>
     );
   }
@@ -30,21 +32,21 @@ function SubmitButton({
   if (!selectedVariantId) {
     return (
       <button
-        aria-label="Selecciona una opción"
+        aria-label={t.cart.selectOption}
         disabled
         className={clsx(buttonClasses, disabledClasses)}
       >
         <div className="absolute left-0 ml-4">
           <PlusIcon className="h-5" />
         </div>
-        Añadir al carrito
+        {t.cart.addToCart}
       </button>
     );
   }
 
   return (
     <button
-      aria-label="Añadir al carrito"
+      aria-label={t.cart.addToCart}
       className={clsx(buttonClasses, {
         "hover:opacity-90": true,
       })}
@@ -52,7 +54,7 @@ function SubmitButton({
       <div className="absolute left-0 ml-4">
         <PlusIcon className="h-5" />
       </div>
-      Añadir al carrito
+      {t.cart.addToCart}
     </button>
   );
 }

@@ -4,6 +4,9 @@ import { PlusIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { addItem } from "components/cart/actions";
 import { useCart } from "components/cart/cart-context";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { localeHref } from "lib/i18n/config";
+import { fill } from "lib/i18n/dictionaries";
 import { Product } from "lib/shopify/types";
 import Link from "next/link";
 import { useActionState } from "react";
@@ -19,6 +22,8 @@ const enabledClasses =
 // the cart drawer auto-opens on success (see CartModal quantity effect).
 export function QuickAddButton({ product }: { product: Product }) {
   const { addCartItem } = useCart();
+  const locale = useLocale();
+  const t = useDictionary();
   const [message, formAction, isPending] = useActionState(addItem, null);
 
   // Every comba is a single-variant product, so it can be added straight from
@@ -31,21 +36,21 @@ export function QuickAddButton({ product }: { product: Product }) {
     <div className="absolute right-3 top-3 z-20">
       {!product.availableForSale ? (
         <span
-          aria-label={`${product.title} agotado`}
+          aria-label={fill(t.cart.soldOutNamed, { title: product.title })}
           className={clsx(
             buttonClasses,
             "cursor-not-allowed bg-neutral-900/70 text-white/40 ring-white/10",
           )}
         >
-          Agotado
+          {t.cart.soldOut}
         </span>
       ) : !variant ? (
         <Link
-          href={`/product/${product.handle}`}
-          aria-label={`Ver opciones de ${product.title}`}
+          href={localeHref(locale, `/product/${product.handle}`)}
+          aria-label={`${t.cart.viewOptionsOf} ${product.title}`}
           className={clsx(buttonClasses, enabledClasses)}
         >
-          Comprar
+          {t.cart.buy}
           <PlusIcon className="h-4 w-4" strokeWidth={2.5} />
         </Link>
       ) : (
@@ -57,13 +62,13 @@ export function QuickAddButton({ product }: { product: Product }) {
         >
           <button
             type="submit"
-            aria-label={`Añadir ${product.title} al carrito`}
+            aria-label={fill(t.cart.addToCartNamed, { title: product.title })}
             disabled={isPending}
             className={clsx(buttonClasses, enabledClasses, {
               "cursor-wait opacity-70": isPending,
             })}
           >
-            Comprar
+            {t.cart.buy}
             <PlusIcon className="h-4 w-4" strokeWidth={2.5} />
           </button>
           <p aria-live="polite" className="sr-only" role="status">

@@ -10,6 +10,8 @@ import {
   Bars3Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { localeHref } from "lib/i18n/config";
 import type { CategoryMenuItem } from "./category-menu";
 import Search, { SearchSkeleton } from "./search";
 
@@ -20,6 +22,8 @@ export default function MobileMenu({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const locale = useLocale();
+  const t = useDictionary();
   const [isOpen, setIsOpen] = useState(false);
   const openMobileMenu = () => setIsOpen(true);
   const closeMobileMenu = () => setIsOpen(false);
@@ -42,7 +46,7 @@ export default function MobileMenu({
     <>
       <button
         onClick={openMobileMenu}
-        aria-label="Abrir menú"
+        aria-label={t.nav.openMenu}
         className="flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white transition-colors md:hidden"
       >
         <Bars3Icon className="h-4" />
@@ -74,7 +78,7 @@ export default function MobileMenu({
                 <button
                   className="mb-4 flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white transition-colors"
                   onClick={closeMobileMenu}
-                  aria-label="Cerrar menú"
+                  aria-label={t.nav.closeMenu}
                 >
                   <XMarkIcon className="h-6" />
                 </button>
@@ -87,7 +91,7 @@ export default function MobileMenu({
                 {categories.length ? (
                   <div className="mt-2 w-full">
                     <p className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
-                      Categorías
+                      {t.nav.categories}
                     </p>
                     <ul className="flex w-full flex-col">
                       {categories.map((category) => (
@@ -106,12 +110,12 @@ export default function MobileMenu({
                       ))}
                     </ul>
                     <Link
-                      href="/search"
+                      href={localeHref(locale, "/search")}
                       prefetch={true}
                       onClick={closeMobileMenu}
                       className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-600 px-5 py-2.5 text-base font-semibold text-white transition-colors hover:bg-orange-700"
                     >
-                      Ver todas las combas
+                      {t.nav.viewAllRopes}
                       <ArrowRightIcon className="h-4 w-4" />
                     </Link>
                   </div>

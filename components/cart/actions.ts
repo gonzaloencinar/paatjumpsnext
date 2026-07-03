@@ -96,9 +96,22 @@ export async function updateItemQuantity(
   }
 }
 
-export async function redirectToCheckout() {
+export async function redirectToCheckout(locale?: string) {
   let cart = await getCart();
-  redirect(cart!.checkoutUrl);
+  let checkoutUrl = cart!.checkoutUrl;
+  // Force the checkout language to match the page the buyer is on (belt and
+  // braces on top of the cart's @inContext). Requires the language to be
+  // published in Shopify (Settings → Languages).
+  if (locale === "es" || locale === "en") {
+    try {
+      const url = new URL(checkoutUrl);
+      url.searchParams.set("locale", locale);
+      checkoutUrl = url.toString();
+    } catch {
+      // Malformed URL: fall back to Shopify's default.
+    }
+  }
+  redirect(checkoutUrl);
 }
 
 export async function createCartAndSetCookie() {

@@ -3,9 +3,11 @@
 import clsx from "clsx";
 import { Dialog, Transition } from "@headlessui/react";
 import { ShoppingCartIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
 import LoadingDots from "components/loading-dots";
 import Price from "components/price";
 import { DEFAULT_OPTION } from "lib/constants";
+import { localeHref } from "lib/i18n/config";
 import { createUrl } from "lib/utils";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,6 +29,11 @@ type MerchandiseSearchParams = {
 
 export default function CartModal() {
   const { cart, updateCartItem } = useCart();
+  const locale = useLocale();
+  const t = useDictionary();
+  // The 50 € free-shipping promo applies to Spain (Península/Baleares); hide
+  // the progress UI for international (English) visitors.
+  const showFreeShipping = locale === "es";
   const [isOpen, setIsOpen] = useState(false);
   const quantityRef = useRef(cart?.totalQuantity);
   const openCart = () => setIsOpen(true);
@@ -53,7 +60,7 @@ export default function CartModal() {
 
   return (
     <>
-      <button aria-label="Abrir carrito" onClick={openCart}>
+      <button aria-label={t.cart.open} onClick={openCart}>
         <OpenCart quantity={cart?.totalQuantity} />
       </button>
       <Transition show={isOpen}>
@@ -80,8 +87,8 @@ export default function CartModal() {
           >
             <Dialog.Panel className="fixed bottom-0 right-0 top-0 flex h-full w-full flex-col border-l border-neutral-200 bg-white/80 p-6 text-black backdrop-blur-xl md:w-[390px] dark:border-neutral-700 dark:bg-black/80 dark:text-white">
               <div className="flex items-center justify-between">
-                <p className="text-lg font-semibold">Mi carrito</p>
-                <button aria-label="Cerrar carrito" onClick={closeCart}>
+                <p className="text-lg font-semibold">{t.cart.title}</p>
+                <button aria-label={t.cart.close} onClick={closeCart}>
                   <CloseCart />
                 </button>
               </div>
@@ -90,7 +97,7 @@ export default function CartModal() {
                 <div className="mt-20 flex w-full flex-col items-center justify-center overflow-hidden">
                   <ShoppingCartIcon className="h-16" />
                   <p className="mt-6 text-center text-2xl font-bold">
-                    Tu carrito está vacío.
+                    {t.cart.empty}
                   </p>
                 </div>
               ) : (
@@ -116,7 +123,10 @@ export default function CartModal() {
                         );
 
                         const merchandiseUrl = createUrl(
-                          `/product/${item.merchandise.product.handle}`,
+                          localeHref(
+                            locale,
+                            `/product/${item.merchandise.product.handle}`,
+                          ),
                           new URLSearchParams(merchandiseSearchParams),
                         );
 
@@ -197,33 +207,37 @@ export default function CartModal() {
                         );
                       })}
                   </ul>
-                  <FreeShippingProgress
-                    subtotal={Number(cart.cost.subtotalAmount.amount)}
-                    currencyCode={cart.cost.subtotalAmount.currencyCode}
-                    onContinue={closeCart}
-                  />
+                  {showFreeShipping ? (
+                    <FreeShippingProgress
+                      subtotal={Number(cart.cost.subtotalAmount.amount)}
+                      currencyCode={cart.cost.subtotalAmount.currencyCode}
+                      onContinue={closeCart}
+                    />
+                  ) : null}
                   <div className="py-4 text-sm text-white/60">
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 dark:border-neutral-700">
-                      <p>Envío</p>
-                      {Number(cart.cost.subtotalAmount.amount) >=
-                      FREE_SHIPPING_THRESHOLD ? (
+                      <p>{t.cart.shipping}</p>
+                      {showFreeShipping &&
+                      Number(cart.cost.subtotalAmount.amount) >=
+                        FREE_SHIPPING_THRESHOLD ? (
                         <p className="text-right font-medium text-orange-500">
-                          Gratis*
+                          {t.cart.freeStarred}
                         </p>
                       ) : (
                         <p className="text-right">
-                          Se calcula al finalizar la compra
+                          {t.cart.calculatedAtCheckout}
                         </p>
                       )}
                     </div>
-                    {Number(cart.cost.subtotalAmount.amount) >=
-                    FREE_SHIPPING_THRESHOLD ? (
+                    {showFreeShipping &&
+                    Number(cart.cost.subtotalAmount.amount) >=
+                      FREE_SHIPPING_THRESHOLD ? (
                       <p className="mb-3 text-right text-xs text-neutral-500">
-                        *Envío gratis a Península y Baleares
+                        {t.cart.freeShippingFootnote}
                       </p>
                     ) : null}
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 pt-1 dark:border-neutral-700">
-                      <p>Total</p>
+                      <p>{t.cart.total}</p>
                       <Price
                         className="text-right text-base text-black dark:text-white"
                         amount={cart.cost.totalAmount.amount}
@@ -231,7 +245,7 @@ export default function CartModal() {
                       />
                     </div>
                   </div>
-                  <form action={redirectToCheckout}>
+                  <form action={redirectToCheckout.bind(null, locale)}>
                     <CheckoutButton />
                   </form>
                 </div>
@@ -259,6 +273,7 @@ function CloseCart({ className }: { className?: string }) {
 
 function CheckoutButton() {
   const { pending } = useFormStatus();
+  const t = useDictionary();
 
   return (
     <button
@@ -266,7 +281,7 @@ function CheckoutButton() {
       type="submit"
       disabled={pending}
     >
-      {pending ? <LoadingDots className="bg-white" /> : "Finalizar compra"}
+      {pending ? <LoadingDots className="bg-white" /> : t.cart.checkout}
     </button>
   );
 }

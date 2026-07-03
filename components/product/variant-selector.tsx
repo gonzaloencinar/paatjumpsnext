@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { useDictionary } from "components/i18n/locale-context";
 import { ProductOption, ProductVariant } from "lib/shopify/types";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -19,6 +20,7 @@ export function VariantSelector({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useDictionary();
   const hasNoOptionsOrJustOneOption =
     !options.length ||
     (options.length === 1 && options[0]?.values.length === 1);
@@ -83,7 +85,7 @@ export function VariantSelector({
                 key={value}
                 aria-disabled={!isAvailableForSale}
                 disabled={!isAvailableForSale}
-                title={`${option.name} ${value}${!isAvailableForSale ? " (Agotado)" : ""}`}
+                title={`${option.name} ${value}${!isAvailableForSale ? ` ${t.product.soldOutSuffix}` : ""}`}
                 className={clsx(
                   "flex min-w-[48px] items-center justify-center rounded-full border bg-neutral-100 px-2 py-1 text-sm dark:border-neutral-800 dark:bg-neutral-900",
                   {

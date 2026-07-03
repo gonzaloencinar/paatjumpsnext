@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { XIcon } from "lucide-react";
-import { CRM_CONSENT_TEXT, CRM_PRIVACY_PATH } from "./consent";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { localeHref, localeTag } from "lib/i18n/config";
+import { crmConsentText, CRM_PRIVACY_PATH } from "./consent";
 
 // Barra sticky de captación del lanzamiento (plan §7.1).
 // Estética de marca: naranja-600 pleno con texto blanco, sin grises.
@@ -22,6 +24,8 @@ export function AnnouncementBar({
   percentage: number;
   endsAt: string | null;
 }) {
+  const locale = useLocale();
+  const t = useDictionary();
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -65,39 +69,39 @@ export function AnnouncementBar({
         setStatus("error");
         setError(
           json?.error === "invalid_email"
-            ? "Ese email no parece válido."
+            ? t.announcement.invalidEmail
             : json?.error === "rate_limited"
-              ? "Demasiados intentos, prueba en un rato."
-              : "No se pudo completar el alta. Inténtalo de nuevo.",
+              ? t.announcement.rateLimited
+              : t.announcement.genericError,
         );
       }
     } catch {
       setStatus("error");
-      setError("No se pudo completar el alta. Inténtalo de nuevo.");
+      setError(t.announcement.genericError);
     }
   }
 
   return (
     <aside
-      aria-label="Oferta de lanzamiento"
+      aria-label={t.announcement.ariaLabel}
       className="relative bg-orange-600 text-white"
     >
       <div className="mx-auto flex max-w-(--breakpoint-2xl) flex-col gap-2 px-4 py-2.5 pr-12 md:flex-row md:items-center md:justify-center md:gap-6">
         {status === "success" ? (
           <p className="text-center text-sm font-medium">
-            Hecho: revisa tu correo, tu código −20% va de camino. 📬
+            {t.announcement.success}
           </p>
         ) : (
           <>
             <p className="text-center text-sm font-semibold tracking-wide md:text-left">
               🧡 {name.toUpperCase()}:{" "}
-              <span className="font-black">−{percentage}%</span> en tu primer
-              pedido
+              <span className="font-black">−{percentage}%</span>{" "}
+              {t.announcement.onFirstOrder}
               {endsAt ? (
                 <span className="font-normal text-white/85">
                   {" "}
-                  · hasta el{" "}
-                  {new Intl.DateTimeFormat("es-ES", {
+                  · {t.announcement.until}{" "}
+                  {new Intl.DateTimeFormat(localeTag(locale), {
                     day: "numeric",
                     month: "short",
                   }).format(new Date(endsAt))}
@@ -114,8 +118,8 @@ export function AnnouncementBar({
                   type="email"
                   name="email"
                   required
-                  placeholder="tu@email.com"
-                  aria-label="Tu email"
+                  placeholder={t.announcement.emailPlaceholder}
+                  aria-label={t.announcement.yourEmail}
                   className="h-9 min-w-0 flex-1 rounded-lg border border-white/30 bg-white/15 px-3 text-sm text-white placeholder:text-white/60 focus-visible:ring-white/60"
                 />
                 {/* honeypot anti-bots: oculto para humanos */}
@@ -132,17 +136,19 @@ export function AnnouncementBar({
                   disabled={status === "sending"}
                   className="h-9 shrink-0 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white transition-colors hover:bg-neutral-900 disabled:opacity-60"
                 >
-                  {status === "sending" ? "Enviando…" : "Quiero mi código"}
+                  {status === "sending"
+                    ? t.announcement.sending
+                    : t.announcement.wantMyCode}
                 </button>
               </div>
 
               <p className="text-center text-[11px] leading-snug text-white/85 md:text-left">
-                {CRM_CONSENT_TEXT}{" "}
+                {crmConsentText(locale)}{" "}
                 <Link
-                  href={CRM_PRIVACY_PATH}
+                  href={localeHref(locale, CRM_PRIVACY_PATH)}
                   className="underline underline-offset-2 hover:text-white"
                 >
-                  Política de privacidad
+                  {t.announcement.privacyPolicy}
                 </Link>
               </p>
 
@@ -158,7 +164,7 @@ export function AnnouncementBar({
 
       <button
         type="button"
-        aria-label="Cerrar barra de oferta"
+        aria-label={t.announcement.closeBar}
         onClick={() =>
           dismiss(status === "success" ? "subscribed" : "dismissed")
         }

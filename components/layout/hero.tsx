@@ -1,4 +1,6 @@
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
+import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
+import { getDictionary, type Dictionary } from "lib/i18n/dictionaries";
 import Link from "next/link";
 
 /**
@@ -15,13 +17,9 @@ import Link from "next/link";
  * missing assets fires 404 requests on every page view.
  */
 
-const STATS = [
-  { value: "+10k", label: "saltadores" },
-  { value: "100%", label: "competición" },
-  { value: "4.9★", label: "valoración" },
-];
+export function Hero({ locale = defaultLocale }: { locale?: Locale }) {
+  const t = getDictionary(locale);
 
-export function Hero() {
   return (
     <section className="relative isolate flex min-h-[calc(100svh-76px)] w-full flex-col overflow-hidden bg-neutral-950 md:h-[calc(100svh-76px)]">
       {/* ── Ambient color + vignette ─────────────────────────────────── */}
@@ -36,7 +34,7 @@ export function Hero() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/hero/paat.webp"
-          alt="Paat Jumps, fundadora y referente del salto a la comba"
+          alt={t.hero.paatAlt}
           fetchPriority="high"
           className="h-[42vh] w-auto object-contain drop-shadow-2xl"
         />
@@ -49,33 +47,30 @@ export function Hero() {
           <div className="z-10 flex flex-col items-center md:col-span-6">
             <div className="flex max-w-xl flex-col items-start text-left">
               <h1 className="text-4xl leading-[0.95] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                No todas las combas
+                {t.hero.titleLine1}
                 <br />
-                <span className="text-orange-600">son iguales.</span>
+                <span className="text-orange-600">{t.hero.titleLine2}</span>
               </h1>
 
               <p className="mt-6 max-w-md text-lg text-white/90 text-pretty">
-                Paat Jumps nace de más de seis años de pasión por la comba. De
-                aprender, mejorar y ayudar a miles de personas a descubrir este
-                deporte. Cada comba está montada a mano y cuidada hasta el
-                último detalle.
+                {t.hero.paragraph}
               </p>
 
               {/* CTAs */}
               <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
-                  href="/search"
+                  href={localeHref(locale, "/search")}
                   prefetch={true}
                   className="group inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-base font-semibold text-white transition hover:bg-orange-500"
                 >
-                  Elige la tuya
+                  {t.hero.cta}
                   <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
 
               {/* Stats / social proof — dt is the label, dd the value; visual order flipped with flex-col-reverse */}
               <dl className="mt-12 flex items-center justify-start gap-8 md:mb-14">
-                {STATS.map((s) => (
+                {t.hero.stats.map((s) => (
                   <div key={s.label} className="flex flex-col-reverse">
                     <dt className="text-xs tracking-wide text-white/50 uppercase">
                       {s.label}
@@ -99,7 +94,7 @@ export function Hero() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/hero/paat.webp"
-              alt="Paat Jumps, fundadora y referente del salto a la comba"
+              alt={t.hero.paatAlt}
               className="absolute inset-x-0 bottom-0 mx-auto h-full w-auto object-contain object-bottom drop-shadow-2xl"
             />
           </div>
@@ -111,7 +106,11 @@ export function Hero() {
         <div className="flex overflow-hidden">
           <div className="motion-safe:animate-[heroMarquee_30s_linear_infinite] flex shrink-0 items-center gap-10 py-3 pr-10 whitespace-nowrap">
             {Array.from({ length: 2 }).map((_, i) => (
-              <MarqueeRow key={i} aria-hidden={i === 1} />
+              <MarqueeRow
+                key={i}
+                items={t.hero.marquee}
+                aria-hidden={i === 1}
+              />
             ))}
           </div>
         </div>
@@ -120,17 +119,16 @@ export function Hero() {
   );
 }
 
-const MARQUEE_ITEMS = [
-  "Empuñaduras ergonómicas",
-  "Hechas a mano en España",
-  "Envío en 24/48h",
-  "Usada por profesionales de la comba",
-];
-
-function MarqueeRow(props: { "aria-hidden"?: boolean }) {
+function MarqueeRow({
+  items,
+  ...props
+}: {
+  items: Dictionary["hero"]["marquee"];
+  "aria-hidden"?: boolean;
+}) {
   return (
     <div className="flex shrink-0 items-center gap-10" {...props}>
-      {MARQUEE_ITEMS.map((item) => (
+      {items.map((item) => (
         <span
           key={item}
           className="flex items-center gap-10 text-sm font-medium tracking-wide text-white/60 uppercase"

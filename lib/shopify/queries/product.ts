@@ -1,7 +1,12 @@
 import productFragment from "../fragments/product";
 
+// Every query runs @inContext(language: ...) so titles, descriptions, SEO and
+// facet labels come back in the storefront language (translations managed in
+// Shopify via Translate & Adapt; untranslated content falls back to Spanish).
+
 export const getProductQuery = /* GraphQL */ `
-  query getProduct($handle: String!) {
+  query getProduct($handle: String!, $language: LanguageCode)
+  @inContext(language: $language) {
     product(handle: $handle) {
       ...product
     }
@@ -14,7 +19,8 @@ export const getProductsQuery = /* GraphQL */ `
     $sortKey: ProductSortKeys
     $reverse: Boolean
     $query: String
-  ) {
+    $language: LanguageCode
+  ) @inContext(language: $language) {
     products(sortKey: $sortKey, reverse: $reverse, query: $query, first: 100) {
       edges {
         node {
@@ -36,7 +42,8 @@ export const getSearchProductsFilteredQuery = /* GraphQL */ `
     $sortKey: SearchSortKeys
     $reverse: Boolean
     $filters: [ProductFilter!]
-  ) {
+    $language: LanguageCode
+  ) @inContext(language: $language) {
     search(
       query: $query
       types: PRODUCT
@@ -69,7 +76,8 @@ export const getSearchProductsFilteredQuery = /* GraphQL */ `
 `;
 
 export const getProductRecommendationsQuery = /* GraphQL */ `
-  query getProductRecommendations($productId: ID!) {
+  query getProductRecommendations($productId: ID!, $language: LanguageCode)
+  @inContext(language: $language) {
     productRecommendations(productId: $productId) {
       ...product
     }

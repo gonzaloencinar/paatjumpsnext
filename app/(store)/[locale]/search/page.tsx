@@ -3,20 +3,39 @@ import ProductGridItems from "components/layout/product-grid-items";
 import { getRefineCategories } from "components/layout/search/refine/categories";
 import { RefineBar } from "components/layout/search/refine/refine-bar";
 import { defaultSort, sorting } from "lib/constants";
+import { defaultLocale, isLocale } from "lib/i18n/config";
+import { getDictionary } from "lib/i18n/dictionaries";
 import { searchParamsToProductFilters } from "lib/search/filtering";
 import { getSearchWithFilters } from "lib/shopify";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Buscar",
-  description: "Busca productos en la tienda.",
-};
+export async function generateMetadata(props: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale: raw } = await props.params;
+  const locale = isLocale(raw) ? raw : defaultLocale;
+  const t = getDictionary(locale);
+
+  return {
+    title: t.search.metaTitle,
+    description: t.search.metaDescription,
+    alternates: {
+      canonical: locale === "en" ? "/en/search" : "/search",
+      languages: { es: "/search", en: "/en/search", "x-default": "/search" },
+    },
+  };
+}
 
 // `search` only supports RELEVANCE and PRICE sorting.
 const SEARCH_SORTS = ["relevance", "price-asc", "price-desc"];
 
 export default async function SearchPage(props: {
+  params: Promise<{ locale: string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const { locale: raw } = await props.params;
+  const locale = isLocale(raw) ? raw : defaultLocale;
+  const t = getDictionary(locale);
   const searchParams = (await props.searchParams) ?? {};
   const { sort, q: searchValue } = searchParams as { [key: string]: string };
   const { sortKey, reverse } =
@@ -24,8 +43,14 @@ export default async function SearchPage(props: {
   const filters = searchParamsToProductFilters(searchParams);
 
   const [{ products, filters: facets }, categories] = await Promise.all([
-    getSearchWithFilters({ query: searchValue, sortKey, reverse, filters }),
-    getRefineCategories(),
+    getSearchWithFilters({
+      query: searchValue,
+      sortKey,
+      reverse,
+      filters,
+      locale,
+    }),
+    getRefineCategories(locale),
   ]);
 
   return (
@@ -39,10 +64,12 @@ export default async function SearchPage(props: {
       {searchValue ? (
         <p className="mb-4 text-sm text-white/60">
           {products.length === 0
-            ? "No hay combas que coincidan con "
-            : `Mostrando ${products.length} ${
-                products.length === 1 ? "resultado" : "resultados"
-              } para `}
+            ? `${t.search.noResultsFor} `
+            : `${t.search.showingPrefix} ${products.length} ${
+                products.length === 1
+                  ? t.search.resultOne
+                  : t.search.resultOther
+              } ${t.search.forWord} `}
           <span className="font-semibold text-white">
             &quot;{searchValue}&quot;
           </span>
@@ -53,9 +80,7 @@ export default async function SearchPage(props: {
           <ProductGridItems products={products} />
         </Grid>
       ) : (
-        <p className="py-3 text-lg">
-          No hay combas que coincidan con estos filtros.
-        </p>
+        <p className="py-3 text-lg">{t.search.noMatchFilters}</p>
       )}
     </>
   );

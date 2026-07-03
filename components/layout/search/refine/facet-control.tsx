@@ -2,6 +2,8 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { localeTag } from "lib/i18n/config";
 import { swatchColors } from "lib/search/colors";
 import {
   facetToParamKey,
@@ -14,12 +16,6 @@ import { cn } from "lib/utils";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRefine } from "./use-refine";
-
-const eur = new Intl.NumberFormat("es-ES", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
 
 // Render swatches for any LIST facet that looks like a color, regardless of
 // whether the merchant models color as a variant option or a metafield.
@@ -140,6 +136,13 @@ function ColorSwatch({
 
 function PriceControl({ facet }: { facet: ProductFilterFacet }) {
   const { searchParams, setPrice } = useRefine();
+  const locale = useLocale();
+  const t = useDictionary();
+  const eur = new Intl.NumberFormat(localeTag(locale), {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  });
   const bounds = priceBoundsFromFacet(facet);
   const priceParam = searchParams.get("price");
 
@@ -160,7 +163,7 @@ function PriceControl({ facet }: { facet: ProductFilterFacet }) {
   if (bounds.min === bounds.max) {
     return (
       <p className="px-1 py-1 text-sm text-white/55">
-        Todas las combas cuestan {eur.format(bounds.min)}.
+        {t.search.allRopesCost} {eur.format(bounds.min)}.
       </p>
     );
   }

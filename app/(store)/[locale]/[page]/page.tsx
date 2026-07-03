@@ -1,20 +1,34 @@
 import type { Metadata } from "next";
 
 import Prose from "components/prose";
+import {
+  defaultLocale,
+  isLocale,
+  localeHref,
+  localeTag,
+} from "lib/i18n/config";
+import { getDictionary } from "lib/i18n/dictionaries";
 import { getPage } from "lib/shopify";
 import { notFound } from "next/navigation";
 
 export async function generateMetadata(props: {
-  params: Promise<{ page: string }>;
+  params: Promise<{ locale: string; page: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const page = await getPage(params.page);
+  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  const page = await getPage(params.page, locale);
 
   if (!page) return notFound();
+
+  const path = `/${params.page}`;
 
   return {
     title: page.seo?.title || page.title,
     description: page.seo?.description || page.bodySummary,
+    alternates: {
+      canonical: localeHref(locale, path),
+      languages: { es: path, en: `/en${path}`, "x-default": path },
+    },
     openGraph: {
       publishedTime: page.createdAt,
       modifiedTime: page.updatedAt,
@@ -24,10 +38,12 @@ export async function generateMetadata(props: {
 }
 
 export default async function Page(props: {
-  params: Promise<{ page: string }>;
+  params: Promise<{ locale: string; page: string }>;
 }) {
   const params = await props.params;
-  const page = await getPage(params.page);
+  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  const t = getDictionary(locale);
+  const page = await getPage(params.page, locale);
 
   if (!page) return notFound();
 
@@ -36,8 +52,8 @@ export default async function Page(props: {
       <h1 className="mb-8 text-5xl font-bold">{page.title}</h1>
       <Prose className="mb-8" html={page.body} />
       <p className="text-sm italic">
-        {`This document was last updated on ${new Intl.DateTimeFormat(
-          undefined,
+        {`${t.page.lastUpdatedPrefix} ${new Intl.DateTimeFormat(
+          localeTag(locale),
           {
             year: "numeric",
             month: "long",

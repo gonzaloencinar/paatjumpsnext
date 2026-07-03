@@ -135,17 +135,25 @@ export type ShopifyProduct = {
   updatedAt: string;
 };
 
+// Optional @inContext variables shared by every storefront operation: buyer
+// country (Shopify Markets) and content language (translations).
+export type StorefrontContext = {
+  country?: string;
+  language?: string;
+};
+
 export type ShopifyCartOperation = {
   data: {
     cart: ShopifyCart;
   };
-  variables: {
+  variables: StorefrontContext & {
     cartId: string;
   };
 };
 
 export type ShopifyCreateCartOperation = {
   data: { cartCreate: { cart: ShopifyCart } };
+  variables: StorefrontContext;
 };
 
 export type ShopifyApplyDiscountOperation = {
@@ -158,7 +166,7 @@ export type ShopifyApplyDiscountOperation = {
       userErrors: { field: string[] | null; message: string }[];
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     cartId: string;
     discountCodes: string[];
   };
@@ -170,7 +178,7 @@ export type ShopifyAddToCartOperation = {
       cart: ShopifyCart;
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     cartId: string;
     lines: {
       merchandiseId: string;
@@ -185,7 +193,7 @@ export type ShopifyRemoveFromCartOperation = {
       cart: ShopifyCart;
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     cartId: string;
     lineIds: string[];
   };
@@ -197,7 +205,7 @@ export type ShopifyUpdateCartOperation = {
       cart: ShopifyCart;
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     cartId: string;
     lines: {
       id: string;
@@ -211,7 +219,7 @@ export type ShopifyCollectionOperation = {
   data: {
     collection: ShopifyCollection;
   };
-  variables: {
+  variables: StorefrontContext & {
     handle: string;
   };
 };
@@ -222,7 +230,7 @@ export type ShopifyCollectionProductsOperation = {
       products: Connection<ShopifyProduct>;
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     handle: string;
     reverse?: boolean;
     sortKey?: string;
@@ -268,7 +276,7 @@ export type ShopifyCollectionProductsFilteredOperation = {
       } & Connection<ShopifyProduct>;
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     handle: string;
     reverse?: boolean;
     sortKey?: string;
@@ -280,6 +288,7 @@ export type ShopifyCollectionsOperation = {
   data: {
     collections: Connection<ShopifyCollection>;
   };
+  variables: StorefrontContext;
 };
 
 export type ShopifyMenuOperation = {
@@ -291,25 +300,26 @@ export type ShopifyMenuOperation = {
       }[];
     };
   };
-  variables: {
+  variables: StorefrontContext & {
     handle: string;
   };
 };
 
 export type ShopifyPageOperation = {
   data: { pageByHandle: Page };
-  variables: { handle: string };
+  variables: StorefrontContext & { handle: string };
 };
 
 export type ShopifyPagesOperation = {
   data: {
     pages: Connection<Page>;
   };
+  variables: StorefrontContext;
 };
 
 export type ShopifyProductOperation = {
   data: { product: ShopifyProduct };
-  variables: {
+  variables: StorefrontContext & {
     handle: string;
   };
 };
@@ -318,7 +328,7 @@ export type ShopifyProductRecommendationsOperation = {
   data: {
     productRecommendations: ShopifyProduct[];
   };
-  variables: {
+  variables: StorefrontContext & {
     productId: string;
   };
 };
@@ -327,7 +337,7 @@ export type ShopifyProductsOperation = {
   data: {
     products: Connection<ShopifyProduct>;
   };
-  variables: {
+  variables: StorefrontContext & {
     query?: string;
     reverse?: boolean;
     sortKey?: string;
@@ -340,7 +350,7 @@ export type ShopifySearchProductsOperation = {
       productFilters: ProductFilterFacet[];
     } & Connection<ShopifyProduct>;
   };
-  variables: {
+  variables: StorefrontContext & {
     query: string;
     reverse?: boolean;
     sortKey?: string;

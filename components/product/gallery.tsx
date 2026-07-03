@@ -2,6 +2,7 @@
 
 import { ArrowLeftIcon, ArrowRightIcon } from "@heroicons/react/24/outline";
 import { GridTileImage } from "components/grid/tile";
+import { useDictionary } from "components/i18n/locale-context";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -12,6 +13,7 @@ export function Gallery({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useDictionary();
   const imageIndex = searchParams.has("image")
     ? parseInt(searchParams.get("image")!)
     : 0;
@@ -48,7 +50,7 @@ export function Gallery({
             <div className="mx-auto flex h-11 items-center rounded-full border border-white bg-neutral-50/80 text-white/70 backdrop-blur-sm dark:border-black dark:bg-neutral-900/80">
               <button
                 formAction={() => updateImage(previousImageIndex.toString())}
-                aria-label="Imagen anterior del producto"
+                aria-label={t.product.previousImage}
                 className={buttonClassName}
               >
                 <ArrowLeftIcon className="h-5" />
@@ -56,7 +58,7 @@ export function Gallery({
               <div className="mx-1 h-6 w-px bg-white/30"></div>
               <button
                 formAction={() => updateImage(nextImageIndex.toString())}
-                aria-label="Siguiente imagen del producto"
+                aria-label={t.product.nextImage}
                 className={buttonClassName}
               >
                 <ArrowRightIcon className="h-5" />
@@ -75,7 +77,7 @@ export function Gallery({
               <li key={image.src} className="h-20 w-20">
                 <button
                   formAction={() => updateImage(index.toString())}
-                  aria-label="Seleccionar imagen del producto"
+                  aria-label={t.product.selectImage}
                   className="h-full w-full"
                 >
                   <GridTileImage

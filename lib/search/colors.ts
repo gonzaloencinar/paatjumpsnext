@@ -29,12 +29,33 @@ const COLOR_HEX: Record<string, string> = {
   dorado: "#d4af37",
   plateada: "#c7cdd4",
   plateado: "#c7cdd4",
+  // English labels (if color metafield values get translated in Shopify).
+  black: "#1c1c1c",
+  white: "#f5f5f5",
+  grey: "#9ca3af",
+  gray: "#9ca3af",
+  orange: "#ea580c",
+  yellow: "#facc15",
+  red: "#dc2626",
+  pink: "#ec4899",
+  fuchsia: "#e11d8f",
+  purple: "#9333ea",
+  violet: "#7c3aed",
+  blue: "#2563eb",
+  "sky blue": "#38bdf8",
+  turquoise: "#14b8a6",
+  green: "#16a34a",
+  lime: "#84cc16",
+  brown: "#92400e",
+  gold: "#d4af37",
+  golden: "#d4af37",
+  silver: "#c7cdd4",
 };
 
 const normalize = (label: string) =>
   label.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); // strip accents
 
-const STOP_WORDS = new Set(["y", "de", "con", "la", "el"]);
+const STOP_WORDS = new Set(["y", "de", "con", "la", "el", "and", "with"]);
 
 /**
  * Returns up to two hex colors found in a label. Handles multi-tone names like

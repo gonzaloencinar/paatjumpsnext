@@ -3,6 +3,14 @@ import {
   SHOPIFY_GRAPHQL_API_ENDPOINT,
   TAGS,
 } from "lib/constants";
+import {
+  COUNTRY_COOKIE,
+  LOCALE_COOKIE,
+  defaultLocale,
+  isLocale,
+  localeToLanguage,
+  type Locale,
+} from "lib/i18n/config";
 import { isShopifyError } from "lib/type-guards";
 import { ensureStartsWith } from "lib/utils";
 import {
@@ -134,6 +142,21 @@ const removeEdgesAndNodes = <T>(array: Connection<T>): T[] => {
   return array.edges.map((edge) => edge?.node);
 };
 
+// Buyer context for cart operations, from the cookies the middleware sets.
+// Drives @inContext (checkout language, market pricing) and buyerIdentity.
+async function cartBuyerContext(): Promise<{
+  country: string;
+  language: string;
+}> {
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(cookieLocale) ? cookieLocale : defaultLocale;
+  return {
+    country: cookieStore.get(COUNTRY_COOKIE)?.value || "ES",
+    language: localeToLanguage(locale),
+  };
+}
+
 const reshapeCart = (cart: ShopifyCart): Cart => {
   if (!cart.cost?.totalTaxAmount) {
     cart.cost.totalTaxAmount = {
@@ -226,8 +249,10 @@ const reshapeProducts = (products: ShopifyProduct[]) => {
 };
 
 export async function createCart(): Promise<Cart> {
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyCreateCartOperation>({
     query: createCartMutation,
+    variables: { ...context },
   });
 
   return reshapeCart(res.body.data.cartCreate.cart);
@@ -237,11 +262,13 @@ export async function addToCart(
   lines: { merchandiseId: string; quantity: number }[],
 ): Promise<Cart> {
   const cartId = (await cookies()).get("cartId")?.value!;
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyAddToCartOperation>({
     query: addToCartMutation,
     variables: {
       cartId,
       lines,
+      ...context,
     },
   });
   return reshapeCart(res.body.data.cartLinesAdd.cart);
@@ -249,11 +276,13 @@ export async function addToCart(
 
 export async function removeFromCart(lineIds: string[]): Promise<Cart> {
   const cartId = (await cookies()).get("cartId")?.value!;
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyRemoveFromCartOperation>({
     query: removeFromCartMutation,
     variables: {
       cartId,
       lineIds,
+      ...context,
     },
   });
 
@@ -264,11 +293,13 @@ export async function updateCart(
   lines: { id: string; merchandiseId: string; quantity: number }[],
 ): Promise<Cart> {
   const cartId = (await cookies()).get("cartId")?.value!;
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyUpdateCartOperation>({
     query: editCartItemsMutation,
     variables: {
       cartId,
       lines,
+      ...context,
     },
   });
 
@@ -283,9 +314,10 @@ export async function applyCartDiscount(
 ): Promise<boolean> {
   const cartId = (await cookies()).get("cartId")?.value;
   if (!cartId) return false;
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyApplyDiscountOperation>({
     query: applyDiscountMutation,
-    variables: { cartId, discountCodes },
+    variables: { cartId, discountCodes, ...context },
   });
   const codes = res.body.data.cartDiscountCodesUpdate.cart?.discountCodes ?? [];
   return codes.some((entry) => entry.applicable);
@@ -302,9 +334,10 @@ export async function getCart(): Promise<Cart | undefined> {
     return undefined;
   }
 
+  const context = await cartBuyerContext();
   const res = await shopifyFetch<ShopifyCartOperation>({
     query: getCartQuery,
-    variables: { cartId },
+    variables: { cartId, ...context },
   });
 
   // Old carts becomes `null` when you checkout.
@@ -317,6 +350,7 @@ export async function getCart(): Promise<Cart | undefined> {
 
 export async function getCollection(
   handle: string,
+  locale: Locale = defaultLocale,
 ): Promise<Collection | undefined> {
   "use cache";
   cacheTag(TAGS.collections);
@@ -326,6 +360,7 @@ export async function getCollection(
     query: getCollectionQuery,
     variables: {
       handle,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -336,10 +371,12 @@ export async function getCollectionProducts({
   collection,
   reverse,
   sortKey,
+  locale = defaultLocale,
 }: {
   collection: string;
   reverse?: boolean;
   sortKey?: string;
+  locale?: Locale;
 }): Promise<Product[]> {
   "use cache";
   cacheTag(TAGS.collections, TAGS.products);
@@ -358,6 +395,7 @@ export async function getCollectionProducts({
       handle: collection,
       reverse,
       sortKey: sortKey === "CREATED_AT" ? "CREATED" : sortKey,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -378,11 +416,13 @@ export async function getCollectionWithFilters({
   reverse,
   sortKey,
   filters,
+  locale = defaultLocale,
 }: {
   collection: string;
   reverse?: boolean;
   sortKey?: string;
   filters?: ProductFilterInput[];
+  locale?: Locale;
 }): Promise<{ products: Product[]; filters: ProductFilterFacet[] }> {
   "use cache";
   cacheTag(TAGS.collections, TAGS.products);
@@ -402,6 +442,7 @@ export async function getCollectionWithFilters({
       reverse,
       sortKey: sortKey === "CREATED_AT" ? "CREATED" : sortKey,
       filters,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -418,7 +459,9 @@ export async function getCollectionWithFilters({
   };
 }
 
-export async function getCollections(): Promise<Collection[]> {
+export async function getCollections(
+  locale: Locale = defaultLocale,
+): Promise<Collection[]> {
   "use cache";
   cacheTag(TAGS.collections);
   cacheLife("days");
@@ -442,6 +485,7 @@ export async function getCollections(): Promise<Collection[]> {
 
   const res = await shopifyFetch<ShopifyCollectionsOperation>({
     query: getCollectionsQuery,
+    variables: { language: localeToLanguage(locale) },
   });
   const shopifyCollections = removeEdgesAndNodes(res.body?.data?.collections);
   const collections = [
@@ -466,7 +510,10 @@ export async function getCollections(): Promise<Collection[]> {
   return collections;
 }
 
-export async function getMenu(handle: string): Promise<Menu[]> {
+export async function getMenu(
+  handle: string,
+  locale: Locale = defaultLocale,
+): Promise<Menu[]> {
   "use cache";
   cacheTag(TAGS.collections);
   cacheLife("days");
@@ -480,6 +527,7 @@ export async function getMenu(handle: string): Promise<Menu[]> {
     query: getMenuQuery,
     variables: {
       handle,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -494,24 +542,33 @@ export async function getMenu(handle: string): Promise<Menu[]> {
   );
 }
 
-export async function getPage(handle: string): Promise<Page> {
+export async function getPage(
+  handle: string,
+  locale: Locale = defaultLocale,
+): Promise<Page> {
   const res = await shopifyFetch<ShopifyPageOperation>({
     query: getPageQuery,
-    variables: { handle },
+    variables: { handle, language: localeToLanguage(locale) },
   });
 
   return res.body.data.pageByHandle;
 }
 
-export async function getPages(): Promise<Page[]> {
+export async function getPages(
+  locale: Locale = defaultLocale,
+): Promise<Page[]> {
   const res = await shopifyFetch<ShopifyPagesOperation>({
     query: getPagesQuery,
+    variables: { language: localeToLanguage(locale) },
   });
 
   return removeEdgesAndNodes(res.body.data.pages);
 }
 
-export async function getProduct(handle: string): Promise<Product | undefined> {
+export async function getProduct(
+  handle: string,
+  locale: Locale = defaultLocale,
+): Promise<Product | undefined> {
   "use cache";
   cacheTag(TAGS.products);
   cacheLife("days");
@@ -525,6 +582,7 @@ export async function getProduct(handle: string): Promise<Product | undefined> {
     query: getProductQuery,
     variables: {
       handle,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -533,6 +591,7 @@ export async function getProduct(handle: string): Promise<Product | undefined> {
 
 export async function getProductRecommendations(
   productId: string,
+  locale: Locale = defaultLocale,
 ): Promise<Product[]> {
   "use cache";
   cacheTag(TAGS.products);
@@ -542,6 +601,7 @@ export async function getProductRecommendations(
     query: getProductRecommendationsQuery,
     variables: {
       productId,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -552,10 +612,12 @@ export async function getProducts({
   query,
   reverse,
   sortKey,
+  locale = defaultLocale,
 }: {
   query?: string;
   reverse?: boolean;
   sortKey?: string;
+  locale?: Locale;
 }): Promise<Product[]> {
   "use cache";
   cacheTag(TAGS.products);
@@ -567,6 +629,7 @@ export async function getProducts({
       query,
       reverse,
       sortKey,
+      language: localeToLanguage(locale),
     },
   });
 
@@ -582,11 +645,13 @@ export async function getSearchWithFilters({
   reverse,
   sortKey,
   filters,
+  locale = defaultLocale,
 }: {
   query?: string;
   reverse?: boolean;
   sortKey?: string;
   filters?: ProductFilterInput[];
+  locale?: Locale;
 }): Promise<{ products: Product[]; filters: ProductFilterFacet[] }> {
   "use cache";
   cacheTag(TAGS.products);
@@ -605,6 +670,7 @@ export async function getSearchWithFilters({
       sortKey: isPrice ? "PRICE" : "RELEVANCE",
       reverse: isPrice ? reverse : false,
       filters,
+      language: localeToLanguage(locale),
     },
   });
 

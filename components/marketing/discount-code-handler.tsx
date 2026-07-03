@@ -4,6 +4,8 @@ import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { applyDiscountCode } from "components/cart/actions";
+import { useDictionary } from "components/i18n/locale-context";
+import { fill } from "lib/i18n/dictionaries";
 
 // Aterrizaje desde el email (plan §8): paatjumps.com/?code=PAAT-XXXX →
 // guarda el código y lo aplica al carrito vía cartDiscountCodesUpdate.
@@ -13,6 +15,7 @@ function DiscountCodeHandlerInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const t = useDictionary();
   const handled = useRef(false);
 
   useEffect(() => {
@@ -30,19 +33,19 @@ function DiscountCodeHandlerInner() {
     applyDiscountCode(code)
       .then((result) => {
         if (result.applied) {
-          toast.success(`Código ${result.code} aplicado`, {
-            description: "Verás el −20% en tu carrito y en el checkout.",
+          toast.success(fill(t.discount.appliedTitle, { code: result.code }), {
+            description: t.discount.appliedDescription,
           });
         } else if (result.saved) {
-          toast.info(`Código ${result.code} guardado`, {
-            description: "Se aplicará automáticamente a tu carrito.",
+          toast.info(fill(t.discount.savedTitle, { code: result.code }), {
+            description: t.discount.savedDescription,
           });
         }
       })
       .catch(() => {
         // Silencioso: el código sigue en el email y se puede pegar en el checkout.
       });
-  }, [searchParams, pathname, router]);
+  }, [searchParams, pathname, router, t]);
 
   return null;
 }

@@ -1,5 +1,6 @@
 import CartModal from "components/cart/modal";
 import LogoIcon from "components/icons/logo";
+import { localeHref, type Locale } from "lib/i18n/config";
 import { getCollections } from "lib/shopify";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -9,8 +10,8 @@ import Search, { SearchSkeleton } from "./search";
 
 const { SITE_NAME } = process.env;
 
-export async function Navbar() {
-  const collections = await getCollections();
+export async function Navbar({ locale }: { locale: Locale }) {
+  const collections = await getCollections(locale);
 
   // `getCollections` prepends an "All" entry (empty handle) and keeps Shopify's
   // default `frontpage` collection — neither is a real product category.
@@ -23,7 +24,7 @@ export async function Navbar() {
     )
     .map((collection) => ({
       title: collection.title,
-      path: collection.path,
+      path: localeHref(locale, collection.path),
       handle: collection.handle,
       description: collection.description,
     }));
@@ -38,7 +39,7 @@ export async function Navbar() {
       <div className="flex w-full items-center">
         <div className="flex w-full items-center md:w-1/3 md:gap-6">
           <Link
-            href="/"
+            href={localeHref(locale, "/")}
             prefetch={true}
             className="flex w-full items-center justify-center md:w-auto"
             aria-label={SITE_NAME}

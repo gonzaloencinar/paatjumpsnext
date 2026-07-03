@@ -2,6 +2,8 @@
 
 import { ArrowRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { localeHref } from "lib/i18n/config";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -15,12 +17,15 @@ export type CategoryMenuItem = {
 
 export default function CategoryMenu({
   categories,
-  allHref = "/search",
+  allHref,
 }: {
   categories: CategoryMenuItem[];
   allHref?: string;
 }) {
   const pathname = usePathname();
+  const locale = useLocale();
+  const t = useDictionary();
+  const allRopesHref = allHref ?? localeHref(locale, "/search");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,7 +88,7 @@ export default function CategoryMenu({
           open ? "text-orange-400" : "text-white hover:text-orange-400",
         )}
       >
-        Ver combas
+        {t.nav.viewRopes}
         <ChevronDownIcon
           className={clsx(
             "h-4 w-4 transition-transform duration-200",
@@ -113,7 +118,7 @@ export default function CategoryMenu({
             {/* Category list */}
             <div className="sm:col-span-3">
               <p className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wider text-white/50">
-                Nuestras combas
+                {t.nav.ourRopes}
               </p>
               <ul>
                 {categories.map((category, index) => (
@@ -148,7 +153,7 @@ export default function CategoryMenu({
             {/* "View all" featured promo */}
             <div className="sm:col-span-2">
               <Link
-                href={allHref}
+                href={allRopesHref}
                 prefetch={true}
                 className="group/all relative flex h-full flex-col justify-between overflow-hidden rounded-xl bg-orange-600 p-5 text-white"
               >
@@ -179,17 +184,17 @@ export default function CategoryMenu({
 
                 <div className="relative">
                   <p className="text-xs font-medium uppercase tracking-wider text-white/70">
-                    Todo el catálogo
+                    {t.nav.fullCatalog}
                   </p>
                   <p className="mt-2 text-lg font-semibold leading-snug">
-                    ¿No sabes cuál elegir?
+                    {t.nav.notSureWhich}
                   </p>
                   <p className="mt-1 text-sm text-white/80">
-                    Explora todas las combas Paat Jumps en un solo lugar.
+                    {t.nav.exploreAll}
                   </p>
                 </div>
                 <span className="relative mt-5 inline-flex items-center gap-2 self-start rounded-full bg-white px-4 py-2 text-sm font-semibold text-orange-700 transition-all group-hover/all:gap-3">
-                  Ver todas las combas
+                  {t.nav.viewAllRopes}
                   <ArrowRightIcon className="h-4 w-4" />
                 </span>
               </Link>

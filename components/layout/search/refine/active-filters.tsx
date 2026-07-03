@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
 import { describeActiveFilters } from "lib/search/filtering";
 import type { ProductFilterFacet } from "lib/shopify/types";
 import { cn } from "lib/utils";
@@ -15,8 +16,13 @@ export function ActiveFilters({
   className?: string;
 }) {
   const { searchParams, removeFilter, clearAll } = useRefine();
+  const locale = useLocale();
+  const t = useDictionary();
   const params = new URLSearchParams(searchParams.toString());
-  const chips = describeActiveFilters(params, facets);
+  const chips = describeActiveFilters(params, facets, {
+    locale,
+    priceLabel: t.search.price,
+  });
 
   if (!chips.length) return null;
 
@@ -42,7 +48,7 @@ export function ActiveFilters({
         onClick={clearAll}
         className="h-7 text-white/55 hover:text-foreground"
       >
-        Limpiar todo
+        {t.search.clearAll}
       </Button>
     </div>
   );

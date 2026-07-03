@@ -1,3 +1,4 @@
+import { localeTag, type Locale } from "lib/i18n/config";
 import type {
   ProductFilterFacet,
   ProductFilterInput,
@@ -175,8 +176,8 @@ export type ActiveFilter = {
   label: string;
 };
 
-const currencyFmt = (n: number) =>
-  new Intl.NumberFormat("es-ES", {
+const currencyFmt = (n: number, locale: Locale = "es") =>
+  new Intl.NumberFormat(localeTag(locale), {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,
@@ -187,8 +188,10 @@ const currencyFmt = (n: number) =>
 export function describeActiveFilters(
   params: URLSearchParams,
   facets: ProductFilterFacet[],
+  opts?: { locale?: Locale; priceLabel?: string },
 ): ActiveFilter[] {
   const chips: ActiveFilter[] = [];
+  const locale = opts?.locale ?? "es";
 
   // Price is a single chip.
   const price = parsePriceParam(params.get("price") ?? undefined);
@@ -196,8 +199,8 @@ export function describeActiveFilters(
     chips.push({
       key: "price",
       value: null,
-      group: "Precio",
-      label: `${currencyFmt(price.min)} – ${currencyFmt(price.max)}`,
+      group: opts?.priceLabel ?? "Precio",
+      label: `${currencyFmt(price.min, locale)} – ${currencyFmt(price.max, locale)}`,
     });
   }
 

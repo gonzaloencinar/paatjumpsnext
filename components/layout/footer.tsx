@@ -2,17 +2,26 @@ import Link from "next/link";
 
 import FooterMenu from "components/layout/footer-menu";
 import LogoIcon from "components/icons/logo";
+import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
+import { getDictionary } from "lib/i18n/dictionaries";
 import { Suspense } from "react";
 
 const { COMPANY_NAME, SITE_NAME } = process.env;
 
-const footerMenu = [
-  { title: "Todas", path: "/search" },
-  { title: "PVC", path: "/search/combas-pvc" },
-  { title: "Segmentadas", path: "/search/combas-segmentadas" },
-];
-
-export default async function Footer() {
+export default async function Footer({
+  locale = defaultLocale,
+}: {
+  locale?: Locale;
+}) {
+  const t = getDictionary(locale);
+  const footerMenu = [
+    { title: t.footer.all, path: localeHref(locale, "/search") },
+    { title: t.footer.pvc, path: localeHref(locale, "/search/combas-pvc") },
+    {
+      title: t.footer.beaded,
+      path: localeHref(locale, "/search/combas-segmentadas"),
+    },
+  ];
   const copyrightDate = new Date().getFullYear();
   const skeleton =
     "w-full h-6 animate-pulse rounded-sm bg-neutral-200 dark:bg-neutral-700";
@@ -24,7 +33,7 @@ export default async function Footer() {
         <div>
           <Link
             className="flex items-center gap-2 text-black md:pt-1 dark:text-white"
-            href="/"
+            href={localeHref(locale, "/")}
             aria-label={SITE_NAME}
           >
             <LogoIcon className="h-6 w-auto" />
@@ -49,7 +58,7 @@ export default async function Footer() {
             {copyrightName.length && !copyrightName.endsWith(".")
               ? "."
               : ""}{" "}
-            Todos los derechos reservados.
+            {t.footer.rightsReserved}
           </p>
         </div>
       </div>

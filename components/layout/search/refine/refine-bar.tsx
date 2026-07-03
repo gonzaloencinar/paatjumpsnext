@@ -30,7 +30,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useDictionary, useLocale } from "components/i18n/locale-context";
 import { sorting } from "lib/constants";
+import { localeHref } from "lib/i18n/config";
 import { facetToParamKey, parseCsv } from "lib/search/filtering";
 import type { ProductFilterFacet } from "lib/shopify/types";
 import { cn } from "lib/utils";
@@ -45,19 +47,6 @@ export type RefineCategory = {
   path: string;
   handle: string;
 };
-
-const SORT_LABELS: Record<string, string> = {
-  relevance: "Relevancia",
-  "trending-desc": "Lo más vendido",
-  "latest-desc": "Novedades",
-  "price-asc": "Precio: de menor a mayor",
-  "price-desc": "Precio: de mayor a menor",
-};
-
-const sortOptions = sorting.map((item) => {
-  const value = item.slug ?? "relevance";
-  return { value, label: SORT_LABELS[value] ?? item.title };
-});
 
 function facetSelectionCount(
   facet: ProductFilterFacet,
@@ -74,25 +63,30 @@ export function RefineBar({
   facets,
   categories,
   resultCount,
-  noun = "comba",
   sortValues,
 }: {
   facets: ProductFilterFacet[];
   categories: RefineCategory[];
   resultCount: number;
-  noun?: string;
   /** Restrict the sort options to these values (e.g. search supports only RELEVANCE/PRICE). */
   sortValues?: string[];
 }) {
   const { searchParams, pathname, setSort, clearAll, activeFilterCount } =
     useRefine();
+  const locale = useLocale();
+  const t = useDictionary();
 
+  const sortOptions = sorting.map((item) => {
+    const value = item.slug ?? "relevance";
+    return { value, label: t.search.sortLabels[value] ?? item.title };
+  });
   const sortValue = searchParams.get("sort") ?? "relevance";
   const sortChoices = sortValues
     ? sortOptions.filter((option) => sortValues.includes(option.value))
     : sortOptions;
   const hasFacets = facets.length > 0;
-  const countLabel = `${resultCount} ${resultCount === 1 ? noun : `${noun}s`}`;
+  const noun = resultCount === 1 ? t.search.ropeOne : t.search.ropeOther;
+  const countLabel = `${resultCount} ${noun}`;
 
   return (
     <div className="sticky top-0 z-30 -mx-4 mb-6 border-b border-border/80 bg-background/85 px-4 backdrop-blur-md">
@@ -100,10 +94,11 @@ export function RefineBar({
       {categories.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pt-4 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <span className="shrink-0 pr-1 text-xs font-medium tracking-wide text-white/55 uppercase">
-            Tipo
+            {t.search.type}
           </span>
           {categories.map((category) => {
-            const active = pathname === category.path;
+            const href = localeHref(locale, category.path);
+            const active = pathname === href;
             return (
               <Button
                 key={category.path}
@@ -111,7 +106,7 @@ export function RefineBar({
                 size="sm"
                 className="shrink-0 rounded-full"
                 nativeButton={false}
-                render={<Link href={category.path} scroll={false} />}
+                render={<Link href={href} scroll={false} />}
               >
                 {category.title}
               </Button>
@@ -126,7 +121,7 @@ export function RefineBar({
           <span className="font-semibold text-white tabular-nums">
             {resultCount}
           </span>{" "}
-          {resultCount === 1 ? noun : `${noun}s`}
+          {noun}
         </p>
 
         <div className="flex items-center gap-2">
@@ -186,13 +181,13 @@ export function RefineBar({
             <SelectTrigger
               size="sm"
               className="rounded-full"
-              aria-label="Ordenar"
+              aria-label={t.search.sort}
             >
-              <span className="text-white/55">Ordenar:</span>
+              <span className="text-white/55">{t.search.sort}:</span>
               <SelectValue>
                 {(value) =>
                   sortOptions.find((option) => option.value === value)?.label ??
-                  "Relevancia"
+                  t.search.sortLabels.relevance
                 }
               </SelectValue>
             </SelectTrigger>
@@ -218,7 +213,7 @@ export function RefineBar({
                 }
               >
                 <SlidersHorizontalIcon data-icon="inline-start" />
-                Filtros
+                {t.search.filters}
                 {activeFilterCount > 0 && (
                   <Badge className="ml-0.5 size-4 justify-center rounded-full p-0 tabular-nums">
                     {activeFilterCount}
@@ -230,7 +225,9 @@ export function RefineBar({
                 className="flex w-full flex-col gap-0 p-0 sm:max-w-sm"
               >
                 <SheetHeader className="border-b border-border px-5 py-4">
-                  <SheetTitle>Filtros · {countLabel}</SheetTitle>
+                  <SheetTitle>
+                    {t.search.filters} · {countLabel}
+                  </SheetTitle>
                 </SheetHeader>
                 <ScrollArea className="min-h-0 flex-1 px-5">
                   <Accordion
@@ -265,10 +262,10 @@ export function RefineBar({
                     onClick={clearAll}
                     disabled={activeFilterCount === 0}
                   >
-                    Limpiar
+                    {t.search.clear}
                   </Button>
                   <SheetClose render={<Button className="flex-1" />}>
-                    Ver {countLabel}
+                    {t.search.view} {countLabel}
                   </SheetClose>
                 </SheetFooter>
               </SheetContent>

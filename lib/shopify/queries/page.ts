@@ -19,7 +19,8 @@ const pageFragment = /* GraphQL */ `
 `;
 
 export const getPageQuery = /* GraphQL */ `
-  query getPage($handle: String!) {
+  query getPage($handle: String!, $language: LanguageCode)
+  @inContext(language: $language) {
     pageByHandle(handle: $handle) {
       ...page
     }
@@ -28,7 +29,7 @@ export const getPageQuery = /* GraphQL */ `
 `;
 
 export const getPagesQuery = /* GraphQL */ `
-  query getPages {
+  query getPages($language: LanguageCode) @inContext(language: $language) {
     pages(first: 100) {
       edges {
         node {

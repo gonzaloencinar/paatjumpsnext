@@ -2,40 +2,41 @@ import { getCollections, getPages, getProducts } from "lib/shopify";
 import { baseUrl, validateEnvironmentVariables } from "lib/utils";
 import { MetadataRoute } from "next";
 
-type Route = {
-  url: string;
-  lastModified: string;
-};
+type Route = MetadataRoute.Sitemap[number];
 
 export const dynamic = "force-dynamic";
+
+// Spanish lives at the root, English under /en — emit both with hreflang
+// alternates so each language tree gets indexed for its market.
+function localized(path: string, lastModified: string): Route[] {
+  const es = `${baseUrl}${path}`;
+  const en = `${baseUrl}/en${path}`;
+  const alternates = { languages: { es, en } };
+  return [
+    { url: es, lastModified, alternates },
+    { url: en, lastModified, alternates },
+  ];
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   validateEnvironmentVariables();
 
-  const routesMap = [""].map((route) => ({
-    url: `${baseUrl}${route}`,
-    lastModified: new Date().toISOString(),
-  }));
+  const routesMap = localized("", new Date().toISOString());
 
   const collectionsPromise = getCollections().then((collections) =>
-    collections.map((collection) => ({
-      url: `${baseUrl}${collection.path}`,
-      lastModified: collection.updatedAt,
-    })),
+    collections.flatMap((collection) =>
+      localized(collection.path, collection.updatedAt),
+    ),
   );
 
   const productsPromise = getProducts({}).then((products) =>
-    products.map((product) => ({
-      url: `${baseUrl}/product/${product.handle}`,
-      lastModified: product.updatedAt,
-    })),
+    products.flatMap((product) =>
+      localized(`/product/${product.handle}`, product.updatedAt),
+    ),
   );
 
   const pagesPromise = getPages().then((pages) =>
-    pages.map((page) => ({
-      url: `${baseUrl}/${page.handle}`,
-      lastModified: page.updatedAt,
-    })),
+    pages.flatMap((page) => localized(`/${page.handle}`, page.updatedAt)),
   );
 
   let fetchedRoutes: Route[] = [];

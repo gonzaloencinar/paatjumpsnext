@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { useAddToCartForm } from "components/cart/add-to-cart";
+import { useDictionary } from "components/i18n/locale-context";
 import Price from "components/price";
 import { Product } from "lib/shopify/types";
 
@@ -12,6 +13,7 @@ import { Product } from "lib/shopify/types";
  */
 export function StickyAddToCart({ product }: { product: Product }) {
   const { selectedVariantId, message, action } = useAddToCartForm(product);
+  const t = useDictionary();
   const disabled = !product.availableForSale || !selectedVariantId;
 
   return (
@@ -33,7 +35,7 @@ export function StickyAddToCart({ product }: { product: Product }) {
         <button
           disabled={disabled}
           aria-label={
-            product.availableForSale ? "Añadir al carrito" : "Agotado"
+            product.availableForSale ? t.cart.addToCart : t.cart.soldOut
           }
           className={clsx(
             "flex-none rounded-full bg-orange-600 px-6 py-3 text-sm font-semibold text-white transition",
@@ -42,7 +44,7 @@ export function StickyAddToCart({ product }: { product: Product }) {
               : "hover:bg-orange-500 active:scale-[0.98]",
           )}
         >
-          {product.availableForSale ? "Añadir al carrito" : "Agotado"}
+          {product.availableForSale ? t.cart.addToCart : t.cart.soldOut}
         </button>
         <p aria-live="polite" className="sr-only" role="status">
           {message}
