@@ -98,6 +98,8 @@ export type SEO = {
 export type ShopifyCart = {
   id: string | undefined;
   checkoutUrl: string;
+  discountCodes: { code: string; applicable: boolean }[];
+  discountAllocations: { discountedAmount: Money }[];
   cost: {
     subtotalAmount: Money;
     totalAmount: Money;
@@ -169,6 +171,19 @@ export type ShopifyApplyDiscountOperation = {
   variables: StorefrontContext & {
     cartId: string;
     discountCodes: string[];
+  };
+};
+
+export type ShopifyUpdateCartAttributesOperation = {
+  data: {
+    cartAttributesUpdate: {
+      cart: { id: string } | null;
+      userErrors: { field: string[] | null; message: string }[];
+    };
+  };
+  variables: {
+    cartId: string;
+    attributes: { key: string; value: string }[];
   };
 };
 

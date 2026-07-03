@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  ATTRIBUTION_COOKIE,
+  attributionToCartAttributes,
+  parseAttribution,
+} from "lib/attribution";
 import { TAGS } from "lib/constants";
 import {
   addToCart,
@@ -8,7 +13,9 @@ import {
   getCart,
   removeFromCart,
   updateCart,
+  updateCartAttributes,
 } from "lib/shopify";
+import { getPromotionByCode } from "lib/crm/promotions";
 import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -99,17 +106,40 @@ export async function updateItemQuantity(
 export async function redirectToCheckout(locale?: string) {
   let cart = await getCart();
   let checkoutUrl = cart!.checkoutUrl;
-  // Force the checkout language to match the page the buyer is on (belt and
-  // braces on top of the cart's @inContext). Requires the language to be
-  // published in Shopify (Settings → Languages).
-  if (locale === "es" || locale === "en") {
+
+  // Atribución (lib/attribution.ts): volcar los UTMs de la cookie al carrito
+  // como atributos ocultos justo antes del salto — vuelven en el pedido vía
+  // webhook y alimentan /admin/analytics. Nunca bloquea la compra.
+  const attribution = parseAttribution(
+    (await cookies()).get(ATTRIBUTION_COOKIE)?.value,
+  );
+  if (attribution) {
     try {
-      const url = new URL(checkoutUrl);
-      url.searchParams.set("locale", locale);
-      checkoutUrl = url.toString();
+      await updateCartAttributes(attributionToCartAttributes(attribution));
     } catch {
-      // Malformed URL: fall back to Shopify's default.
+      // Sin atribución el checkout sigue adelante.
     }
+  }
+
+  try {
+    const url = new URL(checkoutUrl);
+    // Force the checkout language to match the page the buyer is on (belt and
+    // braces on top of the cart's @inContext). Requires the language to be
+    // published in Shopify (Settings → Languages).
+    if (locale === "es" || locale === "en") {
+      url.searchParams.set("locale", locale);
+    }
+    // Repetir los UTM del último touch en la URL: la analítica propia de
+    // Shopify (customer journey) también los registra.
+    const last = attribution?.last;
+    if (last?.source) {
+      url.searchParams.set("utm_source", last.source);
+      if (last.medium) url.searchParams.set("utm_medium", last.medium);
+      if (last.campaign) url.searchParams.set("utm_campaign", last.campaign);
+    }
+    checkoutUrl = url.toString();
+  } catch {
+    // Malformed URL: fall back to Shopify's default.
   }
   redirect(checkoutUrl);
 }
@@ -139,11 +169,16 @@ export async function applyDiscountCode(rawCode: string) {
   }
 
   const cookieStore = await cookies();
-  // Persistir 35 días: si el carrito caduca o aún no existe, se re-aplica al
-  // crearlo (createCartAndSetCookie).
+  // La cookie caduca cuando termina la promo (así deja de re-aplicarse un código
+  // muerto y la barra sticky vuelve a salir para futuras promos). Sin fecha de
+  // fin (p.ej. afiliados) → 90 días. Ver getPromotionByCode / layout.
+  const promo = await getPromotionByCode(code);
+  const expires = promo?.ends_at ? new Date(promo.ends_at) : null;
   cookieStore.set(DISCOUNT_COOKIE, code, {
-    maxAge: 60 * 60 * 24 * 35,
     path: "/",
+    ...(expires && expires.getTime() > Date.now()
+      ? { expires }
+      : { maxAge: 60 * 60 * 24 * 90 }),
   });
 
   let cart = await getCart();

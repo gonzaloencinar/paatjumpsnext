@@ -26,6 +26,7 @@ import {
   createCartMutation,
   editCartItemsMutation,
   removeFromCartMutation,
+  updateCartAttributesMutation,
 } from "./mutations/cart";
 import { getCartQuery } from "./queries/cart";
 import {
@@ -73,6 +74,7 @@ import {
   ShopifyProductsSitemapOperation,
   ShopifySearchProductsOperation,
   ShopifyRemoveFromCartOperation,
+  ShopifyUpdateCartAttributesOperation,
   ShopifyUpdateCartOperation,
 } from "./types";
 
@@ -320,6 +322,20 @@ export async function applyCartDiscount(
   });
   const codes = res.body.data.cartDiscountCodesUpdate.cart?.discountCodes ?? [];
   return codes.some((entry) => entry.applicable);
+}
+
+// Adjunta la atribución de marketing (UTMs de lib/attribution.ts) como
+// atributos del carrito justo antes de saltar al checkout; Shopify los copia
+// al pedido (note_attributes) y el webhook orders/create los persiste.
+export async function updateCartAttributes(
+  attributes: { key: string; value: string }[],
+): Promise<void> {
+  const cartId = (await cookies()).get("cartId")?.value;
+  if (!cartId || attributes.length === 0) return;
+  await shopifyFetch<ShopifyUpdateCartAttributesOperation>({
+    query: updateCartAttributesMutation,
+    variables: { cartId, attributes },
+  });
 }
 
 export async function getCart(): Promise<Cart | undefined> {

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
+import { baseUrl } from "@/lib/utils";
 
 // Motor de envío de campañas (plan §16.3). Lo dispara el cron cada minuto:
 // cada tick es idempotente y re-entrante — reclama un lote pequeño vía RPC
@@ -30,6 +31,36 @@ export function mergeName(text: string, firstName: string | null) {
     .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+([!?.,;:])/g, "$1")
     .replace(/[,;:]+([!?.])/g, "$1");
+}
+
+// Etiquetado UTM de los enlaces a la tienda: el AttributionTracker del
+// storefront persiste estos parámetros hasta el checkout y acaban en el
+// pedido, así /admin/analytics atribuye ingresos a cada campaña por nombre
+// (además de la atribución por ventana de clic del webhook).
+const STORE_HOSTS = /(^|\.)paatjumps\.com$/i;
+
+export function tagStoreLinks(html: string, campaignName: string) {
+  const campaign = campaignName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "")
+    .slice(0, 60);
+  return html.replace(/href="([^"]+)"/gi, (match, href: string) => {
+    try {
+      const url = new URL(href);
+      const isStore =
+        STORE_HOSTS.test(url.hostname) || `https://${url.host}` === baseUrl;
+      if (!isStore || url.searchParams.has("utm_source")) return match;
+      url.searchParams.set("utm_source", "crm");
+      url.searchParams.set("utm_medium", "email");
+      if (campaign) url.searchParams.set("utm_campaign", campaign);
+      return `href="${url.toString()}"`;
+    } catch {
+      return match; // href relativo o malformado: se deja tal cual
+    }
+  });
 }
 
 export type CampaignTickSummary = {
@@ -106,7 +137,10 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
           to: recipient.email,
           subject: mergeName(campaign.subject ?? "", recipient.first_name),
           react: CampaignEmail({
-            bodyHtml: mergeName(campaign.body_html ?? "", recipient.first_name),
+            bodyHtml: tagStoreLinks(
+              mergeName(campaign.body_html ?? "", recipient.first_name),
+              campaign.name,
+            ),
             preheader: campaign.preheader,
             unsubscribeUrl: unsubscribeUrl(recipient.email),
           }),

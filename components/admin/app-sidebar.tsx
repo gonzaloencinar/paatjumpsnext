@@ -4,9 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BanIcon,
+  ChartSplineIcon,
   ChevronsUpDownIcon,
+  ContactRoundIcon,
   LayoutDashboardIcon,
   LogOutIcon,
+  NewspaperIcon,
+  PackageIcon,
   SendIcon,
   StoreIcon,
   TicketPercentIcon,
@@ -40,13 +44,38 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-const NAV = [
-  { title: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
-  { title: "Contactos", href: "/admin/contacts", icon: UsersIcon },
-  { title: "Campañas", href: "/admin/campaigns", icon: SendIcon },
-  { title: "Promociones", href: "/admin/promotions", icon: TicketPercentIcon },
-  { title: "Automatizaciones", href: "/admin/automations", icon: WorkflowIcon },
-  { title: "Supresiones", href: "/admin/suppressions", icon: BanIcon },
+const NAV_GROUPS = [
+  {
+    label: "Tienda",
+    items: [
+      { title: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
+      { title: "Analítica", href: "/admin/analytics", icon: ChartSplineIcon },
+      { title: "Pedidos", href: "/admin/orders", icon: PackageIcon },
+      { title: "Clientes", href: "/admin/customers", icon: ContactRoundIcon },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { title: "Contactos", href: "/admin/contacts", icon: UsersIcon },
+      { title: "Campañas", href: "/admin/campaigns", icon: SendIcon },
+      {
+        title: "Promociones",
+        href: "/admin/promotions",
+        icon: TicketPercentIcon,
+      },
+      {
+        title: "Automatizaciones",
+        href: "/admin/automations",
+        icon: WorkflowIcon,
+      },
+      { title: "Supresiones", href: "/admin/suppressions", icon: BanIcon },
+    ],
+  },
+  {
+    label: "Contenido",
+    items: [{ title: "Blog", href: "/admin/blog", icon: NewspaperIcon }],
+  },
 ];
 
 export function AppSidebar({ email }: { email: string }) {
@@ -64,30 +93,32 @@ export function AppSidebar({ email }: { email: string }) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Marketing</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.map((item) => {
-                const active =
-                  item.href === "/admin"
-                    ? pathname === "/admin"
-                    : pathname.startsWith(item.href);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      isActive={active}
-                      render={<Link href={item.href} />}
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {NAV_GROUPS.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const active =
+                    item.href === "/admin"
+                      ? pathname === "/admin"
+                      : pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        isActive={active}
+                        render={<Link href={item.href} />}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
 
         <SidebarGroup>
           <SidebarGroupLabel>Atajos</SidebarGroupLabel>

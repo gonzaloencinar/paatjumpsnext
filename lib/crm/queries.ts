@@ -67,7 +67,12 @@ export async function getDashboardData() {
       .from("checkouts")
       .select("id", { count: "exact", head: true })
       .in("status", ["recovered", "converted"]),
-    supabase.from("orders").select("total_price, discount_code").limit(5000),
+    supabase
+      .from("orders")
+      .select("total_price, total_refunded, discount_code")
+      .eq("test", false)
+      .is("cancelled_at", null)
+      .limit(5000),
     supabase
       .from("events")
       .select("id, type, payload, created_at, contacts(email, first_name)")
@@ -89,13 +94,12 @@ export async function getDashboardData() {
   }
 
   const orderRows = orders.data ?? [];
-  const revenueTotal = orderRows.reduce(
-    (sum, o) => sum + (o.total_price ?? 0),
-    0,
-  );
+  const net = (o: { total_price: number | null; total_refunded: number }) =>
+    (o.total_price ?? 0) - (o.total_refunded ?? 0);
+  const revenueTotal = orderRows.reduce((sum, o) => sum + net(o), 0);
   const revenueWithCode = orderRows
     .filter((o) => o.discount_code)
-    .reduce((sum, o) => sum + (o.total_price ?? 0), 0);
+    .reduce((sum, o) => sum + net(o), 0);
 
   return {
     contacts: {
@@ -421,4 +425,29 @@ export async function listSuppressions() {
     .limit(500);
   if (error) throw error;
   return data ?? [];
+}
+
+// ─────────────────────────── Blog ───────────────────────────
+
+export async function listBlogPosts() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select(
+      "id, slug, title, status, published_at, updated_at, created_at, seo_title, seo_description",
+    )
+    .order("published_at", { ascending: false, nullsFirst: true })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getBlogPost(id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return data;
 }

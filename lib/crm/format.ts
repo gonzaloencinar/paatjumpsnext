@@ -1,6 +1,7 @@
 import type { Tables } from "@/lib/supabase/types";
 
 export type Contact = Tables<"contacts">;
+export type Customer = Tables<"customers">;
 export type Campaign = Tables<"campaigns">;
 export type Automation = Tables<"automations">;
 export type AutomationStep = Tables<"automation_steps">;
@@ -9,6 +10,7 @@ export type EmailSend = Tables<"email_sends">;
 export type DiscountCode = Tables<"discount_codes">;
 export type Order = Tables<"orders">;
 export type CrmEvent = Tables<"events">;
+export type BlogPost = Tables<"blog_posts">;
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
@@ -37,6 +39,36 @@ export const CAMPAIGN_STATUS: Record<
   sent: { label: "Enviada", badge: "default" },
   paused: { label: "Pausada", badge: "outline" },
   canceled: { label: "Cancelada", badge: "secondary" },
+};
+
+// Estados de pedido: claves REST (webhook, minúsculas) y GraphQL display
+// (sync, pasadas a minúsculas) conviven — el mapa cubre ambos vocabularios.
+export const ORDER_FINANCIAL_STATUS: Record<
+  string,
+  { label: string; badge: BadgeVariant }
+> = {
+  paid: { label: "Pagado", badge: "default" },
+  pending: { label: "Pendiente", badge: "secondary" },
+  authorized: { label: "Autorizado", badge: "outline" },
+  partially_paid: { label: "Pago parcial", badge: "outline" },
+  partially_refunded: { label: "Reemb. parcial", badge: "outline" },
+  refunded: { label: "Reembolsado", badge: "destructive" },
+  voided: { label: "Anulado", badge: "secondary" },
+  expired: { label: "Expirado", badge: "secondary" },
+};
+
+export const ORDER_FULFILLMENT_STATUS: Record<
+  string,
+  { label: string; badge: BadgeVariant }
+> = {
+  fulfilled: { label: "Enviado", badge: "default" },
+  unfulfilled: { label: "Sin enviar", badge: "secondary" },
+  partial: { label: "Envío parcial", badge: "outline" },
+  partially_fulfilled: { label: "Envío parcial", badge: "outline" },
+  in_progress: { label: "En preparación", badge: "outline" },
+  on_hold: { label: "En espera", badge: "outline" },
+  scheduled: { label: "Programado", badge: "outline" },
+  restocked: { label: "Devuelto a stock", badge: "secondary" },
 };
 
 export const EMAIL_SEND_STATUS: Record<

@@ -26,18 +26,55 @@ function verifyShopifyHmac(payload: string, headers: Headers): boolean {
 
 type Supabase = ReturnType<typeof createAdminClient>;
 
+type OrderAddress = {
+  city?: string | null;
+  province?: string | null;
+  province_code?: string | null;
+  zip?: string | null;
+  country?: string | null;
+  country_code?: string | null;
+};
+
 type OrderPayload = {
   id?: number;
+  name?: string | null;
+  order_number?: number | null;
   email?: string | null;
   checkout_id?: number | null;
   checkout_token?: string | null;
   cart_token?: string | null;
   total_price?: string | null;
+  subtotal_price?: string | null;
+  total_tax?: string | null;
+  total_discounts?: string | null;
+  total_shipping_price_set?: { shop_money?: { amount?: string } } | null;
   currency?: string | null;
   created_at?: string | null;
+  processed_at?: string | null;
+  cancelled_at?: string | null;
+  test?: boolean;
+  financial_status?: string | null;
+  fulfillment_status?: string | null;
+  source_name?: string | null;
+  landing_site?: string | null;
+  referring_site?: string | null;
+  note_attributes?: { name?: string; value?: string | null }[];
   discount_codes?: { code?: string }[];
-  customer?: { email?: string | null } | null;
+  customer?: { id?: number; email?: string | null } | null;
+  shipping_address?: OrderAddress | null;
+  billing_address?: OrderAddress | null;
+  line_items?: {
+    title?: string;
+    quantity?: number;
+    price?: string;
+    sku?: string | null;
+    variant_title?: string | null;
+    product_id?: number | null;
+  }[];
 };
+
+const num = (value: string | null | undefined) =>
+  value != null && value !== "" ? Number(value) : null;
 
 type CheckoutPayload = {
   id?: number;
@@ -100,17 +137,74 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
     campaignId = clicked?.campaign_id ?? null;
   }
 
+  // Atribución UTM: la tienda la adjunta como atributos del carrito con
+  // prefijo "_" (lib/attribution.ts) y Shopify la entrega en note_attributes.
+  const noteAttrs = new Map(
+    (order.note_attributes ?? []).map((a) => [a.name ?? "", a.value ?? ""]),
+  );
+  const attr = (key: string) => {
+    const value = (noteAttrs.get(`_${key}`) ?? noteAttrs.get(key))?.trim();
+    return value || null;
+  };
+
+  const address = order.shipping_address ?? order.billing_address ?? {};
+  const lineItems = (order.line_items ?? []).slice(0, 50).map((item) => ({
+    title: item.title ?? "",
+    variant: item.variant_title ?? null,
+    quantity: item.quantity ?? 1,
+    price: item.price ?? null,
+    sku: item.sku ?? null,
+    product_id: item.product_id ?? null,
+  }));
+
   await supabase.from("orders").upsert({
     id: order.id,
+    name: order.name ?? null,
+    order_number: order.order_number ?? null,
     contact_id: contact?.id ?? null,
+    customer_id: order.customer?.id ?? null,
     email,
     checkout_token: order.checkout_token ?? null,
     cart_token: order.cart_token ?? null,
-    total_price: order.total_price ? Number(order.total_price) : null,
+    total_price: num(order.total_price),
+    subtotal_price: num(order.subtotal_price),
+    total_tax: num(order.total_tax),
+    total_discounts: num(order.total_discounts),
+    total_shipping: num(order.total_shipping_price_set?.shop_money?.amount),
     currency: order.currency ?? null,
     discount_code: discountCode,
-    campaign_id: campaignId,
+    // Solo cuando hay clic atribuible: en orders/updated (semanas después) la
+    // ventana de 5 días ya expiró y un null pisaría la atribución original.
+    ...(campaignId ? { campaign_id: campaignId } : {}),
+    financial_status: order.financial_status ?? null,
+    fulfillment_status: order.fulfillment_status ?? null,
+    cancelled_at: order.cancelled_at ?? null,
+    test: order.test ?? false,
+    source_name: order.source_name ?? null,
+    shipping_city: address.city ?? null,
+    shipping_province: address.province ?? null,
+    shipping_zip: address.zip ?? null,
+    shipping_country: address.country ?? null,
+    shipping_country_code: address.country_code ?? null,
+    line_items: lineItems,
+    utm_source: attr("utm_source"),
+    utm_medium: attr("utm_medium"),
+    utm_campaign: attr("utm_campaign"),
+    utm_term: attr("utm_term"),
+    utm_content: attr("utm_content"),
+    gclid: attr("gclid"),
+    fbclid: attr("fbclid"),
+    landing_page: attr("landing_page"),
+    referrer: attr("referrer"),
+    first_utm_source: attr("first_utm_source"),
+    first_utm_medium: attr("first_utm_medium"),
+    first_utm_campaign: attr("first_utm_campaign"),
+    first_landing_page: attr("first_landing_page"),
+    first_referrer: attr("first_referrer"),
+    shopify_landing_site: order.landing_site ?? null,
+    shopify_referring_site: order.referring_site ?? null,
     created_at: order.created_at ?? new Date().toISOString(),
+    processed_at: order.processed_at ?? null,
   });
 
   if (contact) {
@@ -338,7 +432,10 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
   try {
-    if (topic === "orders/create") {
+    if (topic === "orders/create" || topic === "orders/updated") {
+      // Mismo upsert idempotente: orders/updated refresca estados de pago/
+      // envío y cancelaciones en tiempo real (los importes de reembolso
+      // exactos los reconcilia el cron shopify-sync).
       await handleOrderCreate(supabase, body as OrderPayload);
     } else if (topic === "checkouts/create" || topic === "checkouts/update") {
       await handleCheckout(supabase, body as CheckoutPayload);

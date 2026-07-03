@@ -158,6 +158,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      blog_posts: {
+        Row: {
+          author: string;
+          content_md: string;
+          cover_image_url: string | null;
+          created_at: string;
+          excerpt: string | null;
+          id: string;
+          keywords: string | null;
+          published_at: string | null;
+          seo_description: string | null;
+          seo_title: string | null;
+          slug: string;
+          status: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          author?: string;
+          content_md?: string;
+          cover_image_url?: string | null;
+          created_at?: string;
+          excerpt?: string | null;
+          id?: string;
+          keywords?: string | null;
+          published_at?: string | null;
+          seo_description?: string | null;
+          seo_title?: string | null;
+          slug: string;
+          status?: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          author?: string;
+          content_md?: string;
+          cover_image_url?: string | null;
+          created_at?: string;
+          excerpt?: string | null;
+          id?: string;
+          keywords?: string | null;
+          published_at?: string | null;
+          seo_description?: string | null;
+          seo_title?: string | null;
+          slug?: string;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       campaign_recipients: {
         Row: {
           campaign_id: string;
@@ -383,6 +434,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      customers: {
+        Row: {
+          accepts_email_marketing: boolean | null;
+          city: string | null;
+          country: string | null;
+          country_code: string | null;
+          created_at: string;
+          currency: string | null;
+          email: string | null;
+          first_name: string | null;
+          id: number;
+          last_name: string | null;
+          note: string | null;
+          orders_count: number;
+          phone: string | null;
+          province: string | null;
+          province_code: string | null;
+          shopify_created_at: string | null;
+          shopify_updated_at: string | null;
+          synced_at: string;
+          tags: string[];
+          total_spent: number;
+          verified_email: boolean | null;
+          zip: string | null;
+        };
+        Insert: {
+          accepts_email_marketing?: boolean | null;
+          city?: string | null;
+          country?: string | null;
+          country_code?: string | null;
+          created_at?: string;
+          currency?: string | null;
+          email?: string | null;
+          first_name?: string | null;
+          id: number;
+          last_name?: string | null;
+          note?: string | null;
+          orders_count?: number;
+          phone?: string | null;
+          province?: string | null;
+          province_code?: string | null;
+          shopify_created_at?: string | null;
+          shopify_updated_at?: string | null;
+          synced_at?: string;
+          tags?: string[];
+          total_spent?: number;
+          verified_email?: boolean | null;
+          zip?: string | null;
+        };
+        Update: {
+          accepts_email_marketing?: boolean | null;
+          city?: string | null;
+          country?: string | null;
+          country_code?: string | null;
+          created_at?: string;
+          currency?: string | null;
+          email?: string | null;
+          first_name?: string | null;
+          id?: number;
+          last_name?: string | null;
+          note?: string | null;
+          orders_count?: number;
+          phone?: string | null;
+          province?: string | null;
+          province_code?: string | null;
+          shopify_created_at?: string | null;
+          shopify_updated_at?: string | null;
+          synced_at?: string;
+          tags?: string[];
+          total_spent?: number;
+          verified_email?: boolean | null;
+          zip?: string | null;
+        };
+        Relationships: [];
+      };
       discount_codes: {
         Row: {
           code: string;
@@ -536,39 +662,150 @@ export type Database = {
       orders: {
         Row: {
           campaign_id: string | null;
+          cancelled_at: string | null;
           cart_token: string | null;
           checkout_token: string | null;
           contact_id: string | null;
           created_at: string;
           currency: string | null;
+          customer_id: number | null;
           discount_code: string | null;
           email: string | null;
+          fbclid: string | null;
+          financial_status: string | null;
+          first_landing_page: string | null;
+          first_referrer: string | null;
+          first_utm_campaign: string | null;
+          first_utm_medium: string | null;
+          first_utm_source: string | null;
+          fulfillment_status: string | null;
+          gclid: string | null;
           id: number;
+          landing_page: string | null;
+          line_items: Json | null;
+          name: string | null;
+          order_number: number | null;
+          processed_at: string | null;
+          referrer: string | null;
+          shipping_city: string | null;
+          shipping_country: string | null;
+          shipping_country_code: string | null;
+          shipping_province: string | null;
+          shipping_zip: string | null;
+          shopify_landing_site: string | null;
+          shopify_referring_site: string | null;
+          source_name: string | null;
+          subtotal_price: number | null;
+          synced_at: string | null;
+          test: boolean;
+          total_discounts: number | null;
           total_price: number | null;
+          total_refunded: number;
+          total_shipping: number | null;
+          total_tax: number | null;
+          utm_campaign: string | null;
+          utm_content: string | null;
+          utm_medium: string | null;
+          utm_source: string | null;
+          utm_term: string | null;
         };
         Insert: {
           campaign_id?: string | null;
+          cancelled_at?: string | null;
           cart_token?: string | null;
           checkout_token?: string | null;
           contact_id?: string | null;
           created_at?: string;
           currency?: string | null;
+          customer_id?: number | null;
           discount_code?: string | null;
           email?: string | null;
+          fbclid?: string | null;
+          financial_status?: string | null;
+          first_landing_page?: string | null;
+          first_referrer?: string | null;
+          first_utm_campaign?: string | null;
+          first_utm_medium?: string | null;
+          first_utm_source?: string | null;
+          fulfillment_status?: string | null;
+          gclid?: string | null;
           id: number;
+          landing_page?: string | null;
+          line_items?: Json | null;
+          name?: string | null;
+          order_number?: number | null;
+          processed_at?: string | null;
+          referrer?: string | null;
+          shipping_city?: string | null;
+          shipping_country?: string | null;
+          shipping_country_code?: string | null;
+          shipping_province?: string | null;
+          shipping_zip?: string | null;
+          shopify_landing_site?: string | null;
+          shopify_referring_site?: string | null;
+          source_name?: string | null;
+          subtotal_price?: number | null;
+          synced_at?: string | null;
+          test?: boolean;
+          total_discounts?: number | null;
           total_price?: number | null;
+          total_refunded?: number;
+          total_shipping?: number | null;
+          total_tax?: number | null;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          utm_medium?: string | null;
+          utm_source?: string | null;
+          utm_term?: string | null;
         };
         Update: {
           campaign_id?: string | null;
+          cancelled_at?: string | null;
           cart_token?: string | null;
           checkout_token?: string | null;
           contact_id?: string | null;
           created_at?: string;
           currency?: string | null;
+          customer_id?: number | null;
           discount_code?: string | null;
           email?: string | null;
+          fbclid?: string | null;
+          financial_status?: string | null;
+          first_landing_page?: string | null;
+          first_referrer?: string | null;
+          first_utm_campaign?: string | null;
+          first_utm_medium?: string | null;
+          first_utm_source?: string | null;
+          fulfillment_status?: string | null;
+          gclid?: string | null;
           id?: number;
+          landing_page?: string | null;
+          line_items?: Json | null;
+          name?: string | null;
+          order_number?: number | null;
+          processed_at?: string | null;
+          referrer?: string | null;
+          shipping_city?: string | null;
+          shipping_country?: string | null;
+          shipping_country_code?: string | null;
+          shipping_province?: string | null;
+          shipping_zip?: string | null;
+          shopify_landing_site?: string | null;
+          shopify_referring_site?: string | null;
+          source_name?: string | null;
+          subtotal_price?: number | null;
+          synced_at?: string | null;
+          test?: boolean;
+          total_discounts?: number | null;
           total_price?: number | null;
+          total_refunded?: number;
+          total_shipping?: number | null;
+          total_tax?: number | null;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          utm_medium?: string | null;
+          utm_source?: string | null;
+          utm_term?: string | null;
         };
         Relationships: [
           {
@@ -656,6 +893,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      sync_state: {
+        Row: {
+          key: string;
+          updated_at: string;
+          value: Json;
+        };
+        Insert: {
+          key: string;
+          updated_at?: string;
+          value?: Json;
+        };
+        Update: {
+          key?: string;
+          updated_at?: string;
+          value?: Json;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -663,26 +918,10 @@ export type Database = {
     Functions: {
       assign_discount_code: {
         Args: { p_contact_id: string };
-        Returns: { code: string; expires_at: string | null }[];
-      };
-      claim_due_enrollments: {
-        Args: { p_limit: number };
         Returns: {
-          automation_id: string | null;
-          checkout_id: number | null;
-          contact_id: string | null;
-          created_at: string;
-          id: string;
-          next_run_at: string | null;
-          status: string;
-          step: number;
+          code: string;
+          expires_at: string;
         }[];
-        SetofOptions: {
-          from: "*";
-          to: "automation_enrollments";
-          isOneToOne: false;
-          isSetofReturn: true;
-        };
       };
       claim_campaign_batch: {
         Args: { p_campaign_id: string; p_limit: number };
@@ -700,6 +939,25 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "campaign_recipients";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      claim_due_enrollments: {
+        Args: { p_limit: number };
+        Returns: {
+          automation_id: string | null;
+          checkout_id: number | null;
+          contact_id: string | null;
+          created_at: string;
+          id: string;
+          next_run_at: string | null;
+          status: string;
+          step: number;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "automation_enrollments";
           isOneToOne: false;
           isSetofReturn: true;
         };

@@ -91,3 +91,20 @@ export const applyDiscountMutation = /* GraphQL */ `
     }
   }
 `;
+
+// Atributos personalizados del carrito (atribución UTM, lib/attribution.ts):
+// viajan al pedido como note_attributes y el webhook orders/create los
+// persiste en el CRM. No necesita @inContext (no devuelve textos ni precios).
+export const updateCartAttributesMutation = /* GraphQL */ `
+  mutation cartAttributesUpdate($cartId: ID!, $attributes: [AttributeInput!]!) {
+    cartAttributesUpdate(cartId: $cartId, attributes: $attributes) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;

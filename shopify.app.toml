@@ -1,5 +1,7 @@
-# App custom "PaatJumpsNext" — sync de promociones CRM ↔ Shopify (descuentos).
-# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+# App custom "PaatJumpsNext" — sync CRM ↔ Shopify: descuentos (promociones),
+# pedidos+clientes (lib/crm/shopify-sync.ts) y webhooks del CRM. Los webhooks
+# declarados aquí los crea/gestiona Shopify en cada `shopify app deploy` y se
+# firman con el client secret de la app (SHOPIFY_WEBHOOK_SECRET).
 
 client_id = "4687182a86e110d0b05f23afb1b8876d"
 application_url = "https://checkout.paatjumps.com"
@@ -9,9 +11,17 @@ name = "PaatJumpsNext"
 [webhooks]
 api_version = "2026-04"
 
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create", "orders/updated" ]
+  uri = "https://www.paatjumps.com/api/webhooks/shopify"
+
+  [[webhooks.subscriptions]]
+  topics = [ "checkouts/create", "checkouts/update" ]
+  uri = "https://www.paatjumps.com/api/webhooks/shopify"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_discounts,read_discounts,read_orders,read_checkouts"
+scopes = "write_discounts,read_discounts,read_orders,read_customers,read_checkouts"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

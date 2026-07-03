@@ -3,6 +3,8 @@ import {
   CAMPAIGN_STATUS,
   CONTACT_STATUS,
   EMAIL_SEND_STATUS,
+  ORDER_FINANCIAL_STATUS,
+  ORDER_FULFILLMENT_STATUS,
 } from "@/lib/crm/format";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +33,22 @@ export function CampaignStatusBadge({ status }: { status: string }) {
 export function EmailSendStatusBadge({ status }: { status: string }) {
   const meta = EMAIL_SEND_STATUS[status] ?? {
     label: status,
+    badge: "secondary" as const,
+  };
+  return <Badge variant={meta.badge}>{meta.label}</Badge>;
+}
+
+export function OrderPaymentBadge({ status }: { status: string | null }) {
+  const meta = ORDER_FINANCIAL_STATUS[status ?? "pending"] ?? {
+    label: status ?? "—",
+    badge: "secondary" as const,
+  };
+  return <Badge variant={meta.badge}>{meta.label}</Badge>;
+}
+
+export function OrderFulfillmentBadge({ status }: { status: string | null }) {
+  const meta = ORDER_FULFILLMENT_STATUS[status ?? "unfulfilled"] ?? {
+    label: status ?? "—",
     badge: "secondary" as const,
   };
   return <Badge variant={meta.badge}>{meta.label}</Badge>;
