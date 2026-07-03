@@ -5,9 +5,8 @@ import { AnnouncementBar } from "components/marketing/announcement-bar";
 import { DiscountCodeHandler } from "components/marketing/discount-code-handler";
 import { WelcomeToast } from "components/welcome-toast";
 import { getAnnouncedPromotion } from "lib/crm/promotions";
-import { isLocale, locales } from "lib/i18n/config";
+import { defaultLocale, isLocale, locales } from "lib/i18n/config";
 import { getCart } from "lib/shopify";
-import { notFound } from "next/navigation";
 import { ReactNode } from "react";
 
 // Prerender both language trees (Spanish is served at the root via the
@@ -23,8 +22,11 @@ export default async function StoreLayout({
   children: ReactNode;
   params: Promise<{ locale: string }>;
 }) {
-  const { locale } = await params;
-  if (!isLocale(locale)) notFound();
+  // Invalid locales (junk one-segment URLs like /favicon.ico that skip the
+  // middleware rewrite) 404 in the PAGES — a notFound() thrown from a layout
+  // has no boundary and breaks the render. Normalize here for the providers.
+  const { locale: raw } = await params;
+  const locale = isLocale(raw) ? raw : defaultLocale;
 
   // Don't await the fetch, pass the Promise to the context provider
   const cart = getCart();

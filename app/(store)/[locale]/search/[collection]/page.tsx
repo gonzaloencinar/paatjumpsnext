@@ -7,7 +7,7 @@ import ProductGridItems from "components/layout/product-grid-items";
 import { getRefineCategories } from "components/layout/search/refine/categories";
 import { RefineBar } from "components/layout/search/refine/refine-bar";
 import { defaultSort, sorting } from "lib/constants";
-import { defaultLocale, isLocale, localeHref } from "lib/i18n/config";
+import { isLocale, localeHref } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { searchParamsToProductFilters } from "lib/search/filtering";
 
@@ -15,7 +15,8 @@ export async function generateMetadata(props: {
   params: Promise<{ locale: string; collection: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const collection = await getCollection(params.collection, locale);
 
   if (!collection) return notFound();
@@ -41,7 +42,8 @@ export default async function CategoryPage(props: {
 }) {
   const searchParams = (await props.searchParams) ?? {};
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const t = getDictionary(locale);
   const { sort } = searchParams as { [key: string]: string };
   const { sortKey, reverse } =

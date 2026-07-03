@@ -1,15 +1,16 @@
 import { Carousel } from "components/carousel";
 import Footer from "components/layout/footer";
 import { Hero } from "components/layout/hero";
-import { defaultLocale, isLocale } from "lib/i18n/config";
+import { isLocale } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 export async function generateMetadata(props: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
-  const { locale: raw } = await props.params;
-  const locale = isLocale(raw) ? raw : defaultLocale;
+  const { locale } = await props.params;
+  if (!isLocale(locale)) return notFound();
   const t = getDictionary(locale);
 
   return {
@@ -27,8 +28,10 @@ export async function generateMetadata(props: {
 export default async function HomePage(props: {
   params: Promise<{ locale: string }>;
 }) {
-  const { locale: raw } = await props.params;
-  const locale = isLocale(raw) ? raw : defaultLocale;
+  const { locale } = await props.params;
+  // Junk one-segment URLs (e.g. /favicon.ico with no file) land here with an
+  // invalid "locale" — 404 them instead of serving the home page.
+  if (!isLocale(locale)) return notFound();
 
   return (
     <>

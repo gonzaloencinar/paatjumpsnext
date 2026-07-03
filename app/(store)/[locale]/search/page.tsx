@@ -3,17 +3,18 @@ import ProductGridItems from "components/layout/product-grid-items";
 import { getRefineCategories } from "components/layout/search/refine/categories";
 import { RefineBar } from "components/layout/search/refine/refine-bar";
 import { defaultSort, sorting } from "lib/constants";
-import { defaultLocale, isLocale } from "lib/i18n/config";
+import { isLocale } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { searchParamsToProductFilters } from "lib/search/filtering";
 import { getSearchWithFilters } from "lib/shopify";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 export async function generateMetadata(props: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
-  const { locale: raw } = await props.params;
-  const locale = isLocale(raw) ? raw : defaultLocale;
+  const { locale } = await props.params;
+  if (!isLocale(locale)) return notFound();
   const t = getDictionary(locale);
 
   return {
@@ -33,8 +34,8 @@ export default async function SearchPage(props: {
   params: Promise<{ locale: string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { locale: raw } = await props.params;
-  const locale = isLocale(raw) ? raw : defaultLocale;
+  const { locale } = await props.params;
+  if (!isLocale(locale)) return notFound();
   const t = getDictionary(locale);
   const searchParams = (await props.searchParams) ?? {};
   const { sort, q: searchValue } = searchParams as { [key: string]: string };

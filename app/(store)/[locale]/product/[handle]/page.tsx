@@ -3,12 +3,7 @@ import Footer from "components/layout/footer";
 import { Gallery } from "components/product/gallery";
 import { ProductDescription } from "components/product/product-description";
 import { HIDDEN_PRODUCT_TAG } from "lib/constants";
-import {
-  defaultLocale,
-  isLocale,
-  localeHref,
-  type Locale,
-} from "lib/i18n/config";
+import { isLocale, localeHref, type Locale } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getProduct, getProductRecommendations } from "lib/shopify";
 import type { Image } from "lib/shopify/types";
@@ -21,7 +16,8 @@ export async function generateMetadata(props: {
   params: Promise<{ locale: string; handle: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const product = await getProduct(params.handle, locale);
 
   if (!product) return notFound();
@@ -64,7 +60,8 @@ export default async function ProductPage(props: {
   params: Promise<{ locale: string; handle: string }>;
 }) {
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const product = await getProduct(params.handle, locale);
 
   if (!product) return notFound();

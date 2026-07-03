@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 
 import Prose from "components/prose";
-import {
-  defaultLocale,
-  isLocale,
-  localeHref,
-  localeTag,
-} from "lib/i18n/config";
+import { isLocale, localeHref, localeTag } from "lib/i18n/config";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getPage } from "lib/shopify";
 import { notFound } from "next/navigation";
@@ -15,7 +10,8 @@ export async function generateMetadata(props: {
   params: Promise<{ locale: string; page: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const page = await getPage(params.page, locale);
 
   if (!page) return notFound();
@@ -41,7 +37,8 @@ export default async function Page(props: {
   params: Promise<{ locale: string; page: string }>;
 }) {
   const params = await props.params;
-  const locale = isLocale(params.locale) ? params.locale : defaultLocale;
+  if (!isLocale(params.locale)) return notFound();
+  const locale = params.locale;
   const t = getDictionary(locale);
   const page = await getPage(params.page, locale);
 
