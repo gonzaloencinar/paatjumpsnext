@@ -3,7 +3,13 @@ import Link from "next/link";
 import FooterMenu from "components/layout/footer-menu";
 import LogoIcon from "components/icons/logo";
 import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
-import { browsePath, categoryPath, COL_BEADED, COL_PVC } from "lib/i18n/routes";
+import {
+  browsePath,
+  categoryPath,
+  COL_BEADED,
+  COL_PVC,
+  pagePath,
+} from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { Suspense } from "react";
 
@@ -19,6 +25,7 @@ export default async function Footer({
     { title: t.footer.all, path: browsePath(locale) },
     { title: t.footer.pvc, path: categoryPath(locale, COL_PVC) },
     { title: t.footer.beaded, path: categoryPath(locale, COL_BEADED) },
+    { title: "Blog", path: pagePath(locale, "blog") },
   ];
   const copyrightDate = new Date().getFullYear();
   const skeleton =

@@ -1,5 +1,10 @@
+import { getPublishedPosts } from "lib/blog/queries";
 import { browsePath, categoryPath, productPath } from "lib/i18n/routes";
-import { getAllProductsForSitemap, getCollections, getPages } from "lib/shopify";
+import {
+  getAllProductsForSitemap,
+  getCollections,
+  getPages,
+} from "lib/shopify";
 import { baseUrl, validateEnvironmentVariables } from "lib/utils";
 import { MetadataRoute } from "next";
 
@@ -75,11 +80,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     pages.flatMap((page) => localized(`/${page.handle}`, page.updatedAt)),
   );
 
+  // Blog solo en español: una única URL canónica por entrada, sin par /en.
+  const blogPromise = getPublishedPosts().then((posts): Route[] => [
+    ...(posts.length > 0
+      ? [{ url: `${baseUrl}/blog`, lastModified: new Date().toISOString() }]
+      : []),
+    ...posts.map((post) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: post.updated_at,
+    })),
+  ]);
+
   let fetchedRoutes: Route[] = [];
 
   try {
     fetchedRoutes = (
-      await Promise.all([collectionsPromise, productsPromise, pagesPromise])
+      await Promise.all([
+        collectionsPromise,
+        productsPromise,
+        pagesPromise,
+        blogPromise,
+      ])
     ).flat();
   } catch (error) {
     throw JSON.stringify(error, null, 2);
