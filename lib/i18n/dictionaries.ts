@@ -196,8 +196,8 @@ const en = {
   },
   footer: {
     all: "All",
-    pvc: "PVC",
-    beaded: "Beaded",
+    pvc: "PVC Ropes",
+    beaded: "Beaded Ropes",
     rightsReserved: "All rights reserved.",
   },
   cart: {
