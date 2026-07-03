@@ -5,7 +5,7 @@ import clsx from "clsx";
 import { addItem } from "components/cart/actions";
 import { useCart } from "components/cart/cart-context";
 import { useDictionary, useLocale } from "components/i18n/locale-context";
-import { localeHref } from "lib/i18n/config";
+import { productPath } from "lib/i18n/routes";
 import { fill } from "lib/i18n/dictionaries";
 import { Product } from "lib/shopify/types";
 import Link from "next/link";
@@ -46,7 +46,7 @@ export function QuickAddButton({ product }: { product: Product }) {
         </span>
       ) : !variant ? (
         <Link
-          href={localeHref(locale, `/product/${product.handle}`)}
+          href={productPath(locale, product.handle)}
           aria-label={`${t.cart.viewOptionsOf} ${product.title}`}
           className={clsx(buttonClasses, enabledClasses)}
         >

@@ -1,6 +1,7 @@
 // Store locales. Spanish is served at the root (canonical URLs unchanged);
-// English lives under /en. The middleware rewrites "/" → "/es" internally and
-// redirects non-Spanish visitors to /en on first visit (see middleware.ts).
+// English lives under /en. The proxy rewrites "/" → "/es" internally and
+// redirects non-Spanish visitors to /en on first visit (see proxy.ts). Localized
+// URL slugs (e.g. /combas/pvc ↔ /en/jump-ropes/pvc) live in ./routes.ts.
 export const locales = ["es", "en"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "es";

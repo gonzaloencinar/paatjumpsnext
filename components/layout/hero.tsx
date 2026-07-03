@@ -1,5 +1,6 @@
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
-import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
+import { defaultLocale, type Locale } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import { getDictionary, type Dictionary } from "lib/i18n/dictionaries";
 import Link from "next/link";
 
@@ -60,7 +61,7 @@ export function Hero({ locale = defaultLocale }: { locale?: Locale }) {
               {/* CTAs */}
               <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
-                  href={localeHref(locale, "/search")}
+                  href={browsePath(locale)}
                   prefetch={true}
                   className="group inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-base font-semibold text-white transition hover:bg-orange-500"
                 >

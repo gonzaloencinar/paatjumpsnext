@@ -1,6 +1,7 @@
 import CartModal from "components/cart/modal";
 import LogoIcon from "components/icons/logo";
 import { localeHref, type Locale } from "lib/i18n/config";
+import { categoryPath } from "lib/i18n/routes";
 import { getCollections } from "lib/shopify";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -24,7 +25,7 @@ export async function Navbar({ locale }: { locale: Locale }) {
     )
     .map((collection) => ({
       title: collection.title,
-      path: localeHref(locale, collection.path),
+      path: categoryPath(locale, collection.handle),
       handle: collection.handle,
       description: collection.description,
     }));

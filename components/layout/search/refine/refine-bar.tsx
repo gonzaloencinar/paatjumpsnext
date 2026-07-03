@@ -30,9 +30,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useDictionary, useLocale } from "components/i18n/locale-context";
+import { useDictionary } from "components/i18n/locale-context";
 import { sorting } from "lib/constants";
-import { localeHref } from "lib/i18n/config";
 import { facetToParamKey, parseCsv } from "lib/search/filtering";
 import type { ProductFilterFacet } from "lib/shopify/types";
 import { cn } from "lib/utils";
@@ -73,7 +72,6 @@ export function RefineBar({
 }) {
   const { searchParams, pathname, setSort, clearAll, activeFilterCount } =
     useRefine();
-  const locale = useLocale();
   const t = useDictionary();
 
   const sortOptions = sorting.map((item) => {
@@ -97,7 +95,7 @@ export function RefineBar({
             {t.search.type}
           </span>
           {categories.map((category) => {
-            const href = localeHref(locale, category.path);
+            const href = category.path;
             const active = pathname === href;
             return (
               <Button

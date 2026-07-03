@@ -6,7 +6,8 @@ import { DiscountCodeHandler } from "components/marketing/discount-code-handler"
 import { WelcomeToast } from "components/welcome-toast";
 import { getAnnouncedPromotion } from "lib/crm/promotions";
 import { geist } from "lib/fonts";
-import { defaultLocale, isLocale, localeHref, locales } from "lib/i18n/config";
+import { defaultLocale, isLocale, locales } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import { getCart } from "lib/shopify";
 import { baseUrl, cn } from "lib/utils";
 import Script from "next/script";
@@ -72,7 +73,7 @@ export default async function StoreLayout({
     inLanguage: locale,
     potentialAction: {
       "@type": "SearchAction",
-      target: `${baseUrl}${localeHref(locale, "/search")}?q={search_term_string}`,
+      target: `${baseUrl}${browsePath(locale)}?q={search_term_string}`,
       "query-input": "required name=search_term_string",
     },
   };

@@ -36,9 +36,9 @@ export type CartItem = {
   };
 };
 
-export type Collection = ShopifyCollection & {
-  path: string;
-};
+// The public URL is derived per-locale from the handle via lib/i18n/routes
+// (categoryPath), so no path is stored on the collection itself.
+export type Collection = ShopifyCollection;
 
 export type Image = {
   url: string;

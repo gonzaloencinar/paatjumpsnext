@@ -8,7 +8,8 @@ import ProductGridItems from "components/layout/product-grid-items";
 import { getRefineCategories } from "components/layout/search/refine/categories";
 import { RefineBar } from "components/layout/search/refine/refine-bar";
 import { defaultSort, sorting } from "lib/constants";
-import { isLocale, localeHref, type Locale } from "lib/i18n/config";
+import { isLocale, type Locale } from "lib/i18n/config";
+import { categoryPath, productPath } from "lib/i18n/routes";
 import { fill, getDictionary } from "lib/i18n/dictionaries";
 import { searchParamsToProductFilters } from "lib/search/filtering";
 import { baseUrl } from "lib/utils";
@@ -30,7 +31,6 @@ export async function generateMetadata(props: {
 
   if (!collection) return notFound();
 
-  const path = `/search/${params.collection}`;
   const indexable = isIndexableCollection(params.collection);
 
   return {
@@ -40,8 +40,12 @@ export async function generateMetadata(props: {
       collection.description ||
       fill(t.collection.fallbackDescription, { title: collection.title }),
     alternates: {
-      canonical: localeHref(locale, path),
-      languages: { es: path, en: `/en${path}`, "x-default": path },
+      canonical: categoryPath(locale, params.collection),
+      languages: {
+        es: categoryPath("es", params.collection),
+        en: categoryPath("en", params.collection),
+        "x-default": categoryPath("es", params.collection),
+      },
     },
     ...(indexable ? {} : { robots: { index: false, follow: false } }),
   };
@@ -169,7 +173,7 @@ function CollectionJsonLd({
           "@type": "ListItem",
           position: 2,
           name: collectionTitle,
-          item: `${baseUrl}${localeHref(locale, `/search/${collectionHandle}`)}`,
+          item: `${baseUrl}${categoryPath(locale, collectionHandle)}`,
         },
       ],
     },
@@ -179,7 +183,7 @@ function CollectionJsonLd({
       itemListElement: productHandles.map((handle, index) => ({
         "@type": "ListItem",
         position: index + 1,
-        url: `${baseUrl}${localeHref(locale, `/product/${handle}`)}`,
+        url: `${baseUrl}${productPath(locale, handle)}`,
       })),
     },
   ];

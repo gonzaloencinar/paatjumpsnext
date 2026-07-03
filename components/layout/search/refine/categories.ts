@@ -1,12 +1,12 @@
 import { defaultLocale, type Locale } from "lib/i18n/config";
+import { browsePath, categoryPath } from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getCollections } from "lib/shopify";
 import type { RefineCategory } from "./refine-bar";
 
 // Builds the "Tipo de comba" pills: a leading "Todas" entry plus the real
 // product categories (mirrors the navbar's filtering of "All", `frontpage` and
-// `hidden-*` collections). Paths stay locale-neutral; the RefineBar prefixes
-// them with /en when needed.
+// `hidden-*` collections). Paths are fully localized public URLs (incl. /en).
 export async function getRefineCategories(
   locale: Locale = defaultLocale,
 ): Promise<RefineCategory[]> {
@@ -21,9 +21,12 @@ export async function getRefineCategories(
     )
     .map((collection) => ({
       title: collection.title,
-      path: collection.path,
+      path: categoryPath(locale, collection.handle),
       handle: collection.handle,
     }));
 
-  return [{ title: t.search.all, path: "/search", handle: "" }, ...categories];
+  return [
+    { title: t.search.all, path: browsePath(locale), handle: "" },
+    ...categories,
+  ];
 }

@@ -4,6 +4,7 @@ import { getRefineCategories } from "components/layout/search/refine/categories"
 import { RefineBar } from "components/layout/search/refine/refine-bar";
 import { defaultSort, sorting } from "lib/constants";
 import { isLocale } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { searchParamsToProductFilters } from "lib/search/filtering";
 import { getSearchWithFilters } from "lib/shopify";
@@ -21,8 +22,12 @@ export async function generateMetadata(props: {
     title: t.search.metaTitle,
     description: t.search.metaDescription,
     alternates: {
-      canonical: locale === "en" ? "/en/search" : "/search",
-      languages: { es: "/search", en: "/en/search", "x-default": "/search" },
+      canonical: browsePath(locale),
+      languages: {
+        es: browsePath("es"),
+        en: browsePath("en"),
+        "x-default": browsePath("es"),
+      },
     },
   };
 }

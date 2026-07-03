@@ -1,3 +1,4 @@
+import { browsePath, categoryPath, productPath } from "lib/i18n/routes";
 import { getCollections, getPages, getProducts } from "lib/shopify";
 import { baseUrl, validateEnvironmentVariables } from "lib/utils";
 import { MetadataRoute } from "next";
@@ -6,11 +7,27 @@ type Route = MetadataRoute.Sitemap[number];
 
 export const dynamic = "force-dynamic";
 
-// Spanish lives at the root, English under /en — emit both with hreflang
-// alternates so each language tree gets indexed for its market.
+// Spanish lives at the root, English under /en. Home and static pages share the
+// same slug in both languages, so /en is a plain prefix here.
 function localized(path: string, lastModified: string): Route[] {
   const es = `${baseUrl}${path}`;
   const en = `${baseUrl}/en${path}`;
+  const alternates = { languages: { es, en, "x-default": es } };
+  return [
+    { url: es, lastModified, alternates },
+    { url: en, lastModified, alternates },
+  ];
+}
+
+// Collections and products have fully translated slugs per language, so their
+// two URLs are built from lib/i18n/routes rather than a plain /en prefix.
+function altPair(
+  esPath: string,
+  enPath: string,
+  lastModified: string,
+): Route[] {
+  const es = `${baseUrl}${esPath}`;
+  const en = `${baseUrl}${enPath}`;
   const alternates = { languages: { es, en, "x-default": es } };
   return [
     { url: es, lastModified, alternates },
@@ -29,13 +46,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // noindex); las `hidden-*` ya las filtra getCollections().
       .filter((collection) => collection.handle !== "frontpage")
       .flatMap((collection) =>
-        localized(collection.path, collection.updatedAt),
+        // handle "" is the synthetic "All" entry → the browse hub.
+        collection.handle === ""
+          ? altPair(browsePath("es"), browsePath("en"), collection.updatedAt)
+          : altPair(
+              categoryPath("es", collection.handle),
+              categoryPath("en", collection.handle),
+              collection.updatedAt,
+            ),
       ),
   );
 
   const productsPromise = getProducts({}).then((products) =>
     products.flatMap((product) =>
-      localized(`/product/${product.handle}`, product.updatedAt),
+      altPair(
+        productPath("es", product.handle),
+        productPath("en", product.handle),
+        product.updatedAt,
+      ),
     ),
   );
 

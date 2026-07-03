@@ -11,7 +11,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useDictionary, useLocale } from "components/i18n/locale-context";
-import { localeHref } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import type { CategoryMenuItem } from "./category-menu";
 import Search, { SearchSkeleton } from "./search";
 
@@ -110,7 +110,7 @@ export default function MobileMenu({
                       ))}
                     </ul>
                     <Link
-                      href={localeHref(locale, "/search")}
+                      href={browsePath(locale)}
                       prefetch={true}
                       onClick={closeMobileMenu}
                       className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-600 px-5 py-2.5 text-base font-semibold text-white transition-colors hover:bg-orange-700"

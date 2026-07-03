@@ -178,10 +178,7 @@ const reshapeCollection = (
     return undefined;
   }
 
-  return {
-    ...collection,
-    path: `/search/${collection.handle}`,
-  };
+  return { ...collection };
 };
 
 const reshapeCollections = (collections: ShopifyCollection[]) => {
@@ -477,7 +474,6 @@ export async function getCollections(
           title: "All",
           description: "All products",
         },
-        path: "/search",
         updatedAt: new Date().toISOString(),
       },
     ];
@@ -497,7 +493,6 @@ export async function getCollections(
         title: "All",
         description: "All products",
       },
-      path: "/search",
       updatedAt: new Date().toISOString(),
     },
     // Filter out the `hidden` collections.

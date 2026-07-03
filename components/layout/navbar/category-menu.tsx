@@ -3,7 +3,7 @@
 import { ArrowRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { useDictionary, useLocale } from "components/i18n/locale-context";
-import { localeHref } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -25,7 +25,7 @@ export default function CategoryMenu({
   const pathname = usePathname();
   const locale = useLocale();
   const t = useDictionary();
-  const allRopesHref = allHref ?? localeHref(locale, "/search");
+  const allRopesHref = allHref ?? browsePath(locale);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

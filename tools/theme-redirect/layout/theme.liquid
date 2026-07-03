@@ -12,18 +12,31 @@
     {%- if template contains 'gift_card' -%}
       <link rel="canonical" href="{{ canonical_url }}">
     {%- else -%}
-      {%- assign hl_target = 'https://www.paatjumps.com/' -%}
+      {%- comment -%}
+        Un solo salto: apuntamos directo a los slugs LOCALIZADOS del escaparate
+        headless (ver lib/i18n/routes.ts). Español = raíz canónica; un visitante
+        EN lo re-dirige el proxy de www después. Evita el 2º salto que dejaría el
+        viejo /search/* → 301 → /combas/*.
+      {%- endcomment -%}
+      {%- assign hl_base = 'https://www.paatjumps.com' -%}
+      {%- assign hl_target = hl_base | append: '/' -%}
       {%- case template.name -%}
         {%- when 'product' -%}
-          {%- assign hl_target = 'https://www.paatjumps.com/product/' | append: product.handle -%}
+          {%- comment -%} Slug ES de producto = el handle de Shopify {%- endcomment -%}
+          {%- assign hl_target = hl_base | append: '/productos/' | append: product.handle -%}
         {%- when 'collection' -%}
-          {%- assign hl_target = 'https://www.paatjumps.com/search/' | append: collection.handle -%}
+          {%- case collection.handle -%}
+            {%- when 'combas-pvc' -%}
+              {%- assign hl_target = hl_base | append: '/combas/pvc' -%}
+            {%- when 'combas-segmentadas' -%}
+              {%- assign hl_target = hl_base | append: '/combas/segmentada' -%}
+            {%- else -%}
+              {%- assign hl_target = hl_base | append: '/combas' -%}
+          {%- endcase -%}
         {%- when 'page' -%}
-          {%- assign hl_target = 'https://www.paatjumps.com/' | append: page.handle -%}
-        {%- when 'search' -%}
-          {%- assign hl_target = 'https://www.paatjumps.com/search' -%}
-        {%- when 'list-collections' -%}
-          {%- assign hl_target = 'https://www.paatjumps.com/search' -%}
+          {%- assign hl_target = hl_base | append: '/' | append: page.handle -%}
+        {%- when 'search', 'list-collections' -%}
+          {%- assign hl_target = hl_base | append: '/combas' -%}
       {%- endcase -%}
       <link rel="canonical" href="{{ hl_target }}">
       <meta http-equiv="refresh" content="0; url={{ hl_target }}">

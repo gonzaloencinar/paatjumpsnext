@@ -7,7 +7,7 @@ import { useDictionary, useLocale } from "components/i18n/locale-context";
 import LoadingDots from "components/loading-dots";
 import Price from "components/price";
 import { DEFAULT_OPTION } from "lib/constants";
-import { localeHref } from "lib/i18n/config";
+import { productPath } from "lib/i18n/routes";
 import { createUrl } from "lib/utils";
 import Image from "next/image";
 import Link from "next/link";
@@ -123,10 +123,7 @@ export default function CartModal() {
                         );
 
                         const merchandiseUrl = createUrl(
-                          localeHref(
-                            locale,
-                            `/product/${item.merchandise.product.handle}`,
-                          ),
+                          productPath(locale, item.merchandise.product.handle),
                           new URLSearchParams(merchandiseSearchParams),
                         );
 

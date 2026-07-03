@@ -1,6 +1,7 @@
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
 import { QuickAddButton } from "components/cart/quick-add-button";
-import { defaultLocale, localeHref, type Locale } from "lib/i18n/config";
+import { defaultLocale, type Locale } from "lib/i18n/config";
+import { browsePath, productPath } from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getCollectionProducts } from "lib/shopify";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export async function Carousel({
           <span className="text-orange-600">{t.carousel.headingHighlight}</span>
         </h2>
         <Link
-          href={localeHref(locale, "/search")}
+          href={browsePath(locale)}
           prefetch={true}
           className="group inline-flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-white transition hover:text-orange-400"
         >
@@ -51,7 +52,7 @@ export async function Carousel({
               className="relative aspect-square w-2/3 max-w-[350px] flex-none md:w-1/3"
             >
               <Link
-                href={localeHref(locale, `/product/${product.handle}`)}
+                href={productPath(locale, product.handle)}
                 className="relative block h-full w-full"
                 tabIndex={i >= products.length ? -1 : undefined}
               >

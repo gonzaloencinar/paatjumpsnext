@@ -2,7 +2,7 @@
 
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useDictionary, useLocale } from "components/i18n/locale-context";
-import { localeHref } from "lib/i18n/config";
+import { browsePath } from "lib/i18n/routes";
 import Form from "next/form";
 import { useSearchParams } from "next/navigation";
 
@@ -13,7 +13,7 @@ export default function Search() {
 
   return (
     <Form
-      action={localeHref(locale, "/search")}
+      action={browsePath(locale)}
       className="w-max-[550px] relative w-full lg:w-80 xl:w-full"
     >
       <input

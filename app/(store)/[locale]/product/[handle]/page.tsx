@@ -4,7 +4,8 @@ import Footer from "components/layout/footer";
 import { Gallery } from "components/product/gallery";
 import { ProductDescription } from "components/product/product-description";
 import { HIDDEN_PRODUCT_TAG } from "lib/constants";
-import { isLocale, localeHref, type Locale } from "lib/i18n/config";
+import { isLocale, type Locale } from "lib/i18n/config";
+import { browsePath, productPath } from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getProduct, getProductRecommendations } from "lib/shopify";
 import type { Image } from "lib/shopify/types";
@@ -26,7 +27,6 @@ export async function generateMetadata(props: {
 
   const { url, width, height, altText: alt } = product.featuredImage || {};
   const indexable = !product.tags.includes(HIDDEN_PRODUCT_TAG);
-  const path = `/product/${params.handle}`;
 
   return {
     title: product.seo.title || product.title,
@@ -35,8 +35,12 @@ export async function generateMetadata(props: {
     description:
       product.seo.description || truncateForMeta(product.description),
     alternates: {
-      canonical: localeHref(locale, path),
-      languages: { es: path, en: `/en${path}`, "x-default": path },
+      canonical: productPath(locale, params.handle),
+      languages: {
+        es: productPath("es", params.handle),
+        en: productPath("en", params.handle),
+        "x-default": productPath("es", params.handle),
+      },
     },
     robots: {
       index: indexable,
@@ -72,7 +76,7 @@ export default async function ProductPage(props: {
   if (!product) return notFound();
 
   const t = getDictionary(locale);
-  const productUrl = `${baseUrl}${localeHref(locale, `/product/${product.handle}`)}`;
+  const productUrl = `${baseUrl}${productPath(locale, product.handle)}`;
   const availability = product.availableForSale
     ? "https://schema.org/InStock"
     : "https://schema.org/OutOfStock";
@@ -125,7 +129,7 @@ export default async function ProductPage(props: {
         "@type": "ListItem",
         position: 2,
         name: t.collection.breadcrumbCatalog,
-        item: `${baseUrl}${localeHref(locale, "/search")}`,
+        item: `${baseUrl}${browsePath(locale)}`,
       },
       {
         "@type": "ListItem",
@@ -200,7 +204,7 @@ async function RelatedProducts({ id, locale }: { id: string; locale: Locale }) {
           >
             <Link
               className="relative h-full w-full"
-              href={localeHref(locale, `/product/${product.handle}`)}
+              href={productPath(locale, product.handle)}
               prefetch={true}
             >
               <GridTileImage

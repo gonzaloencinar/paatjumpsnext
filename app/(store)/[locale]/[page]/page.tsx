@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import Prose from "components/prose";
-import { isLocale, localeHref, localeTag } from "lib/i18n/config";
+import { isLocale, localeTag } from "lib/i18n/config";
+import { pagePath } from "lib/i18n/routes";
 import { getDictionary } from "lib/i18n/dictionaries";
 import { getPage } from "lib/shopify";
 import { notFound } from "next/navigation";
@@ -16,14 +17,16 @@ export async function generateMetadata(props: {
 
   if (!page) return notFound();
 
-  const path = `/${params.page}`;
-
   return {
     title: page.seo?.title || page.title,
     description: page.seo?.description || page.bodySummary,
     alternates: {
-      canonical: localeHref(locale, path),
-      languages: { es: path, en: `/en${path}`, "x-default": path },
+      canonical: pagePath(locale, params.page),
+      languages: {
+        es: pagePath("es", params.page),
+        en: pagePath("en", params.page),
+        "x-default": pagePath("es", params.page),
+      },
     },
     openGraph: {
       publishedTime: page.createdAt,

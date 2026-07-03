@@ -6,6 +6,11 @@ import {
   isLocale,
   type Locale,
 } from "@/lib/i18n/config";
+import {
+  legacyRedirect,
+  publicToInternal,
+  translatePath,
+} from "@/lib/i18n/routes";
 
 // Crawlers keep the canonical URLs: Spanish at the root, English at /en
 // (linked via hreflang). Auto-redirecting bots by IP would get the root
@@ -23,7 +28,8 @@ function detectLocale(request: NextRequest, country: string): Locale {
   return "es";
 }
 
-export async function middleware(request: NextRequest) {
+// Next 16 renamed the "middleware" file convention to "proxy" (same runtime).
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // El CRM mantiene su middleware de sesión; la tienda no toca Supabase.
@@ -31,6 +37,15 @@ export async function middleware(request: NextRequest) {
 
   const country =
     request.headers.get("x-vercel-ip-country")?.toUpperCase() ?? "";
+  const isBot = BOT_RE.test(request.headers.get("user-agent") ?? "");
+
+  // Retired URLs (pre-localization /search & /product) → new localized slugs.
+  const legacy = legacyRedirect(pathname);
+  if (legacy) {
+    const url = request.nextUrl.clone();
+    url.pathname = legacy;
+    return NextResponse.redirect(url, 301);
+  }
 
   // /es/* is internal-only (the root IS Spanish): canonicalize away.
   if (pathname === "/es" || pathname.startsWith("/es/")) {
@@ -41,19 +56,24 @@ export async function middleware(request: NextRequest) {
 
   const isEnglishPath = pathname === "/en" || pathname.startsWith("/en/");
   const preferred = detectLocale(request, country);
-  const isBot = BOT_RE.test(request.headers.get("user-agent") ?? "");
 
   let response: NextResponse;
   if (isEnglishPath) {
-    // Real route segment (app/(store)/[locale] with locale = "en").
-    response = NextResponse.next();
-  } else if (preferred === "en" && !isBot) {
+    // Real route segment: rewrite the localized public path onto the internal
+    // /search|/product route (app/(store)/[locale] with locale = "en").
+    const rel = pathname === "/en" ? "/" : pathname.slice(3);
     const url = request.nextUrl.clone();
-    url.pathname = pathname === "/" ? "/en" : `/en${pathname}`;
+    url.pathname = `/en${publicToInternal("en", rel)}`;
+    response = NextResponse.rewrite(url);
+  } else if (preferred === "en" && !isBot) {
+    // Non-Spanish visitor on an unprefixed (Spanish) URL → the matching English
+    // URL. Must translate slugs, not blind-prefix /en (that breaks /combas/pvc).
+    const url = request.nextUrl.clone();
+    url.pathname = translatePath("es", "en", pathname);
     response = NextResponse.redirect(url, 307);
   } else {
     const url = request.nextUrl.clone();
-    url.pathname = pathname === "/" ? "/es" : `/es${pathname}`;
+    url.pathname = `/es${publicToInternal("es", pathname)}`;
     response = NextResponse.rewrite(url);
   }
 
