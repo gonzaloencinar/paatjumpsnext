@@ -160,7 +160,6 @@ export async function POST(request: Request) {
         : "Bienvenida a Paat Jumps",
       idempotencyKey: `welcome/${contactId}/${promo?.code ?? "nocode"}`,
       react: WelcomeEmail({
-        firstName,
         code: promo?.code ?? null,
         percentage: promo?.percentage ?? null,
         expiresAt: promo?.ends_at ?? null,

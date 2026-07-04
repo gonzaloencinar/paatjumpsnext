@@ -232,7 +232,7 @@ export function AutomationStepCard({
                 id={`step-subject-${step.id}`}
                 name="subject"
                 defaultValue={step.subject ?? ""}
-                placeholder="¿Ya sabes con cuál quedarte, {{nombre}}?"
+                placeholder="¿Ya sabes con cuál quedarte?"
               />
             </Field>
 
@@ -257,16 +257,18 @@ export function AutomationStepCard({
                 name="body_html"
                 rows={8}
                 defaultValue={step.body_html ?? ""}
-                placeholder="<p>Hola{{nombre}}…</p>"
+                placeholder="<p>Hola…</p>"
                 className="font-mono text-xs"
               />
               <FieldDescription>
                 Se envuelve con la plantilla de marca (cabecera, fondo oscuro,
-                baja). Admite <code className="font-mono">{"{{nombre}}"}</code>
+                baja). Admite{" "}
+                <code className="font-mono">{"{{codigo_descuento}}"}</code> (la
+                promo activa o un código personal 15% de un solo uso, 48 h)
                 {cartTags ? (
                   <>
                     , <code className="font-mono">{"{{url_carrito}}"}</code>{" "}
-                    (enlace para retomar el checkout) y{" "}
+                    (enlace que retoma el carrito y aplica el código) y{" "}
                     <code className="font-mono">{"{{productos_carrito}}"}</code>{" "}
                     (resumen de lo que dejó; sin el tag se añade solo al final
                     del email)

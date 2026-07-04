@@ -175,6 +175,16 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
   const contact = email ? await findContactByEmail(supabase, email) : null;
   const discountCode = order.discount_codes?.[0]?.code?.toUpperCase() ?? null;
 
+  // Código personal de recuperación usado → canjeado (además del usageLimit 1
+  // de Shopify, así el motor no se lo vuelve a ofrecer). No-op para promos.
+  if (discountCode) {
+    await supabase
+      .from("discount_codes")
+      .update({ redeemed: true })
+      .eq("code", discountCode)
+      .eq("redeemed", false);
+  }
+
   // Atribución por ventana de clic (§16.6): último clic ≤5 días en una
   // campaña. La atribución por promo enlazada llega con 3d.
   let campaignId: string | null = null;

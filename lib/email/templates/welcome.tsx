@@ -4,8 +4,9 @@
 
 import { IDENTITY_PARAM } from "@/lib/crm/identity";
 
+// Sin nombre a propósito (decisión 2026-07-04): muchas altas llegan sin él y
+// el saludo genérico evita el "¡Hola, !" y los textos a dos velocidades.
 type WelcomeEmailProps = {
-  firstName: string | null;
   code: string | null;
   percentage: number | null;
   expiresAt: string | null;
@@ -26,7 +27,6 @@ function formatExpiry(iso: string) {
 }
 
 export function WelcomeEmail({
-  firstName,
   code,
   percentage,
   expiresAt,
@@ -78,8 +78,7 @@ export function WelcomeEmail({
             color: "#ffffff",
           }}
         >
-          {firstName ? `¡Hola, ${firstName}!` : "¡Hola!"}{" "}
-          {code ? `Aquí está tu −${pct}%` : "Ya estás dentro"}
+          ¡Hola! {code ? `Aquí está tu −${pct}%` : "Ya estás dentro"}
         </h1>
 
         <p

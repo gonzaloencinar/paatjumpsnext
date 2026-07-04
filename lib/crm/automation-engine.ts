@@ -1,9 +1,13 @@
+import { randomBytes } from "node:crypto";
+import { ES_MAINLAND_THRESHOLD } from "lib/shipping";
 import { mergeName, tagStoreLinks } from "@/lib/crm/campaign-engine";
 import { CRM } from "@/lib/crm/config";
 import { formatMoney } from "@/lib/crm/format";
+import { getActiveGeneralPromotion } from "@/lib/crm/promotions";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
+import { createShopifyDiscount, hasAdminToken } from "@/lib/shopify/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -84,7 +88,78 @@ export function cartSummaryHtml(checkout: {
       ? `<tr><td style="padding:12px 0 0;font-weight:700;color:#ffffff;">Total</td><td align="right" style="padding:12px 0 0;font-weight:700;color:#ffffff;white-space:nowrap;">${formatMoney(checkout.total_price, currency)}</td></tr>`
       : "";
 
-  return `<table width="100%" role="presentation" style="border-collapse:collapse;margin:20px 0;font-size:14px;">${rows}${total}</table>`;
+  // A poco del umbral de envío gratis peninsular → decírselo: añadir algo al
+  // carrito suele ser mejor incentivo (y más barato) que un descuento
+  const freeShippingNudge =
+    checkout.total_price != null &&
+    checkout.total_price > 0 &&
+    checkout.total_price < ES_MAINLAND_THRESHOLD &&
+    currency === "EUR"
+      ? `<p style="margin:0 0 20px;font-size:13px;color:rgba(255,255,255,0.6);">Te faltan ${formatMoney(ES_MAINLAND_THRESHOLD - checkout.total_price)} para el envío gratis (península y Baleares).</p>`
+      : "";
+
+  return `<table width="100%" role="presentation" style="border-collapse:collapse;margin:20px 0;font-size:14px;">${rows}${total}</table>${freeShippingNudge}`;
+}
+
+const DISCOUNT_PCT = 15;
+const DISCOUNT_TTL_HOURS = 48;
+// Sin caracteres ambiguos (0/O, 1/I/L) — el código se teclea a mano a veces
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+function generateRecoveryCode() {
+  const bytes = randomBytes(6);
+  let suffix = "";
+  for (const byte of bytes)
+    suffix += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+  return `VUELVE${DISCOUNT_PCT}-${suffix}`;
+}
+
+// {{codigo_descuento}} → el mejor código disponible para cerrar la compra.
+// Con promo general activa (lanzamiento) se recuerda ESA — ya es pública por
+// diseño y descuenta más. Sin ella, código personal creado al vuelo en
+// Shopify: usageLimit 1 (un solo uso REAL, aunque se comparta) + una vez por
+// cliente + caducidad de 48 h. Si el contacto ya tiene uno vigente (≥6 h de
+// vida) se reusa: reintentos y carritos seguidos no acumulan códigos.
+async function resolveRecoveryDiscount(
+  supabase: ReturnType<typeof createAdminClient>,
+  contactId: string,
+): Promise<string | null> {
+  const promo = await getActiveGeneralPromotion();
+  if (promo) return promo.code;
+
+  const { data: existing } = await supabase
+    .from("discount_codes")
+    .select("code")
+    .eq("contact_id", contactId)
+    .eq("redeemed", false)
+    .gt("expires_at", new Date(Date.now() + 6 * 3_600_000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing.code;
+
+  if (!hasAdminToken()) return null;
+  const code = generateRecoveryCode();
+  const expiresAt = new Date(
+    Date.now() + DISCOUNT_TTL_HOURS * 3_600_000,
+  ).toISOString();
+  const shopifyDiscountId = await createShopifyDiscount({
+    title: `Recuperación de carrito · ${code}`,
+    code,
+    percentage: DISCOUNT_PCT,
+    startsAt: new Date().toISOString(),
+    endsAt: expiresAt,
+    oncePerCustomer: true,
+    usageLimit: 1,
+  });
+  await supabase.from("discount_codes").insert({
+    code,
+    contact_id: contactId,
+    percentage: DISCOUNT_PCT,
+    expires_at: expiresAt,
+    shopify_discount_id: shopifyDiscountId,
+  });
+  return code;
 }
 
 export type AutomationTickSummary = {
@@ -227,40 +302,70 @@ export async function processAutomations(
       continue;
     }
 
-    // {{url_carrito}} → recovery_url del checkout (fallback: el carrito de la
-    // web) — se resuelve siempre para que el tag nunca llegue al email
-    const cartUrl = checkout?.recovery_url ?? `${CRM.baseUrl}/cart`;
-    const mergeAll = (text: string) =>
-      mergeName(text, contact.first_name).replace(
-        /\{\{\s*url_carrito\s*\}\}/gi,
-        cartUrl,
-      );
-
-    // {{productos_carrito}} → resumen del carrito. Sin el tag, el resumen se
-    // añade solo al final del email (los emails de carrito siempre lo llevan);
-    // en asunto/preheader el tag se elimina sin más.
-    const cartHtml = checkout ? cartSummaryHtml(checkout) : "";
-    let bodyHtml = mergeAll(step.body_html ?? "");
-    if (/\{\{\s*productos_carrito\s*\}\}/i.test(bodyHtml)) {
-      bodyHtml = bodyHtml.replace(
-        /\{\{\s*productos_carrito\s*\}\}/gi,
-        cartHtml,
-      );
-    } else if (cartHtml) {
-      bodyHtml += cartHtml;
-    }
-
-    // Enlaces a la tienda: mismos UTM que las campañas (utm_campaign = nombre
-    // de la automatización) + ?pj= para re-identificar el navegador al volver
-    bodyHtml = tagStoreLinks(
-      bodyHtml,
-      (enrollment.automation_id
-        ? automationNameById.get(enrollment.automation_id)
-        : null) ?? "automatizacion",
-      contact.email,
-    );
-
     try {
+      // {{codigo_descuento}} → mejor código disponible (promo general activa
+      // o personal de un solo uso creado en Shopify). Solo si el paso lo usa;
+      // sin código resoluble el paso FALLA (retry) — nunca sale un email cojo.
+      const usesDiscount = /\{\{\s*codigo_descuento\s*\}\}/i.test(
+        `${step.subject ?? ""} ${step.body_html ?? ""}`,
+      );
+      let discountCode: string | null = null;
+      if (usesDiscount) {
+        discountCode = await resolveRecoveryDiscount(supabase, contact.id);
+        if (!discountCode) {
+          throw new Error(
+            "sin código de descuento resoluble (¿SHOPIFY_ADMIN_API_TOKEN?)",
+          );
+        }
+      }
+
+      // {{url_carrito}} → recovery_url del checkout (fallback: el carrito de
+      // la web) — se resuelve siempre para que el tag nunca llegue al email.
+      // Con código, el enlace lo lleva puesto: `discount` lo auto-aplica el
+      // checkout de Shopify; `code` lo aplica nuestra tienda (pj_discount).
+      let cartUrl = checkout?.recovery_url ?? `${CRM.baseUrl}/cart`;
+      if (discountCode) {
+        try {
+          const url = new URL(cartUrl);
+          url.searchParams.set(
+            checkout?.recovery_url ? "discount" : "code",
+            discountCode,
+          );
+          cartUrl = url.toString();
+        } catch {
+          // recovery_url malformada: el enlace sale sin código (el email lo muestra)
+        }
+      }
+
+      const mergeAll = (text: string) =>
+        mergeName(text, contact.first_name)
+          .replace(/\{\{\s*url_carrito\s*\}\}/gi, cartUrl)
+          .replace(/\{\{\s*codigo_descuento\s*\}\}/gi, discountCode ?? "");
+
+      // {{productos_carrito}} → resumen del carrito. Sin el tag, el resumen se
+      // añade solo al final del email (los emails de carrito siempre lo llevan);
+      // en asunto/preheader el tag se elimina sin más.
+      const cartHtml = checkout ? cartSummaryHtml(checkout) : "";
+      let bodyHtml = mergeAll(step.body_html ?? "");
+      if (/\{\{\s*productos_carrito\s*\}\}/i.test(bodyHtml)) {
+        bodyHtml = bodyHtml.replace(
+          /\{\{\s*productos_carrito\s*\}\}/gi,
+          cartHtml,
+        );
+      } else if (cartHtml) {
+        bodyHtml += cartHtml;
+      }
+
+      // Enlaces a la tienda: mismos UTM que las campañas (utm_campaign =
+      // nombre de la automatización) + ?pj= para re-identificar al volver
+      bodyHtml = tagStoreLinks(
+        bodyHtml,
+        (enrollment.automation_id
+          ? automationNameById.get(enrollment.automation_id)
+          : null) ?? "automatizacion",
+        contact.email,
+      );
+
       const result = await sendCrmEmail({
         to: contact.email,
         subject: mergeAll(step.subject ?? "").replace(

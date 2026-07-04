@@ -52,6 +52,9 @@ export type DiscountFields = {
   startsAt: string;
   endsAt: string | null;
   oncePerCustomer: boolean;
+  // Límite TOTAL de usos del código (1 = un solo uso real, aunque lo
+  // compartan). Las promos generales no lo llevan (null/omitido).
+  usageLimit?: number | null;
 };
 
 function basicCodeDiscountInput(fields: DiscountFields) {
@@ -61,6 +64,7 @@ function basicCodeDiscountInput(fields: DiscountFields) {
     startsAt: fields.startsAt,
     endsAt: fields.endsAt,
     appliesOncePerCustomer: fields.oncePerCustomer,
+    usageLimit: fields.usageLimit ?? null,
     customerSelection: { all: true },
     customerGets: {
       value: { percentage: fields.percentage / 100 },

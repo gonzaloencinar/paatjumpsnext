@@ -72,8 +72,8 @@ export function CampaignForm({ campaign }: { campaign?: Campaign }) {
               placeholder="Tu comba nueva con -20% te está esperando"
             />
             <FieldDescription>
-              Admite <code className="font-mono">{"{{nombre}}"}</code> — se
-              sustituye por el nombre del contacto (y se omite si no lo hay).
+              Directo y al grano — sin personalizar con nombre (muchas altas
+              llegan sin él).
             </FieldDescription>
           </Field>
 
@@ -105,8 +105,7 @@ export function CampaignForm({ campaign }: { campaign?: Campaign }) {
             <FieldDescription>
               HTML directo (el editor de bloques llega en la sub-fase 3d). Se
               envuelve solo con la plantilla de marca: cabecera, fondo oscuro y
-              footer con baja. Admite{" "}
-              <code className="font-mono">{"{{nombre}}"}</code>.
+              footer con baja.
             </FieldDescription>
           </Field>
         </FieldGroup>

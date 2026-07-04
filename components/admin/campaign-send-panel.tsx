@@ -340,9 +340,7 @@ export function CampaignSendPanel({
 
           <p className="text-xs text-muted-foreground">
             El envío pasa siempre por la lista de supresiones y sale por lotes
-            (~2 emails/s) desde el cron. Usa{" "}
-            <code className="font-mono">{"{{nombre}}"}</code> en asunto o
-            contenido para personalizar.
+            (~2 emails/s) desde el cron.
           </p>
         </>
       ) : null}
