@@ -875,6 +875,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      short_links: {
+        Row: {
+          clicks: number;
+          created_at: string;
+          destination: string;
+          id: string;
+          last_clicked_at: string | null;
+          notes: string | null;
+          slug: string;
+          updated_at: string;
+          utm_campaign: string | null;
+          utm_content: string | null;
+          utm_medium: string | null;
+          utm_source: string | null;
+          utm_term: string | null;
+        };
+        Insert: {
+          clicks?: number;
+          created_at?: string;
+          destination?: string;
+          id?: string;
+          last_clicked_at?: string | null;
+          notes?: string | null;
+          slug: string;
+          updated_at?: string;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          utm_medium?: string | null;
+          utm_source?: string | null;
+          utm_term?: string | null;
+        };
+        Update: {
+          clicks?: number;
+          created_at?: string;
+          destination?: string;
+          id?: string;
+          last_clicked_at?: string | null;
+          notes?: string | null;
+          slug?: string;
+          updated_at?: string;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          utm_medium?: string | null;
+          utm_source?: string | null;
+          utm_term?: string | null;
+        };
+        Relationships: [];
+      };
       suppressions: {
         Row: {
           created_at: string;
@@ -967,6 +1015,17 @@ export type Database = {
       materialize_campaign: {
         Args: { p_campaign_id: string };
         Returns: number;
+      };
+      register_link_click: {
+        Args: { p_slug: string };
+        Returns: {
+          destination: string;
+          utm_campaign: string;
+          utm_content: string;
+          utm_medium: string;
+          utm_source: string;
+          utm_term: string;
+        }[];
       };
     };
     Enums: {

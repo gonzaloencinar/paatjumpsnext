@@ -35,6 +35,12 @@ export async function proxy(request: NextRequest) {
   // El CRM mantiene su middleware de sesión; la tienda no toca Supabase.
   if (pathname.startsWith("/admin")) return updateSession(request);
 
+  // Acortador de enlaces del CRM (app/l/[slug]/route.ts): vive fuera del
+  // árbol de locales — pasa sin rewrite ni redirección de idioma.
+  if (pathname === "/l" || pathname.startsWith("/l/")) {
+    return NextResponse.next();
+  }
+
   const country =
     request.headers.get("x-vercel-ip-country")?.toUpperCase() ?? "";
   const isBot = BOT_RE.test(request.headers.get("user-agent") ?? "");

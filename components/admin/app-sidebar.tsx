@@ -8,6 +8,7 @@ import {
   ChevronsUpDownIcon,
   ContactRoundIcon,
   LayoutDashboardIcon,
+  LinkIcon,
   LogOutIcon,
   NewspaperIcon,
   PackageIcon,
@@ -59,6 +60,7 @@ const NAV_GROUPS = [
     items: [
       { title: "Contactos", href: "/admin/contacts", icon: UsersIcon },
       { title: "Campañas", href: "/admin/campaigns", icon: SendIcon },
+      { title: "Enlaces", href: "/admin/links", icon: LinkIcon },
       {
         title: "Promociones",
         href: "/admin/promotions",
