@@ -558,6 +558,7 @@ export type Database = {
           automation_id: string | null;
           automation_step_id: string | null;
           campaign_id: string | null;
+          checkout_id: number | null;
           clicked_at: string | null;
           contact_id: string | null;
           created_at: string;
@@ -573,6 +574,7 @@ export type Database = {
           automation_id?: string | null;
           automation_step_id?: string | null;
           campaign_id?: string | null;
+          checkout_id?: number | null;
           clicked_at?: string | null;
           contact_id?: string | null;
           created_at?: string;
@@ -588,6 +590,7 @@ export type Database = {
           automation_id?: string | null;
           automation_step_id?: string | null;
           campaign_id?: string | null;
+          checkout_id?: number | null;
           clicked_at?: string | null;
           contact_id?: string | null;
           created_at?: string;
@@ -612,6 +615,13 @@ export type Database = {
             columns: ["automation_step_id"];
             isOneToOne: false;
             referencedRelation: "automation_steps";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "email_sends_checkout_id_fkey";
+            columns: ["checkout_id"];
+            isOneToOne: false;
+            referencedRelation: "checkouts";
             referencedColumns: ["id"];
           },
           {

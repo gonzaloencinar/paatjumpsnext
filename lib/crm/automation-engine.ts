@@ -276,6 +276,7 @@ export async function processAutomations(
         contactId: contact.id,
         automationId: enrollment.automation_id,
         automationStepId: step.id,
+        checkoutId: enrollment.checkout_id,
         // Determinista por inscripción+paso: el reintento del lease no duplica
         idempotencyKey: `automation:${enrollment.id}:step:${enrollment.step}`,
       });

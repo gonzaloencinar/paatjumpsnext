@@ -451,3 +451,82 @@ export async function getBlogPost(id: string) {
     .maybeSingle();
   return data;
 }
+
+export const CARTS_PER_PAGE = 50;
+
+const CART_STATUSES = [
+  "abandoned",
+  "reached_checkout",
+  "recovered",
+  "converted",
+] as const;
+
+// /admin/carts: carritos (checkouts de Shopify + carritos de la web) con su
+// contacto, el estado de la secuencia de recuperación y los emails enviados
+// (email_sends.checkout_id). KPIs para la cabecera y counts por estado para
+// los filtros.
+export async function getCartsData(params: { estado?: string; page?: number }) {
+  const supabase = await createClient();
+  const page = Math.max(1, params.page ?? 1);
+  const from = (page - 1) * CARTS_PER_PAGE;
+  const estado = (CART_STATUSES as readonly string[]).includes(
+    params.estado ?? "",
+  )
+    ? params.estado
+    : undefined;
+
+  // OJO: el select va en UNA línea — PostgREST rechaza saltos de línea (PGRST100)
+  let listQuery = supabase
+    .from("checkouts")
+    .select(
+      "id, origin, status, email, contact_id, line_items, total_price, currency, abandoned_at, last_event_at, recovery_sent_at, contacts(first_name), automation_enrollments(step, status, next_run_at), email_sends(id, subject, status, sent_at, opened_at, clicked_at)",
+      { count: "exact" },
+    )
+    .order("last_event_at", { ascending: false })
+    .range(from, from + CARTS_PER_PAGE - 1);
+  if (estado) listQuery = listQuery.eq("status", estado);
+
+  const countByStatus = (status: string) =>
+    supabase
+      .from("checkouts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status);
+
+  const [list, abandoned, reached, recoveredRows, converted, contacted] =
+    await Promise.all([
+      listQuery,
+      countByStatus("abandoned"),
+      countByStatus("reached_checkout"),
+      supabase
+        .from("checkouts")
+        .select("total_price")
+        .eq("status", "recovered"),
+      countByStatus("converted"),
+      supabase
+        .from("checkouts")
+        .select("id", { count: "exact", head: true })
+        .not("recovery_sent_at", "is", null),
+    ]);
+  if (list.error) throw list.error;
+
+  const recoveredCount = (recoveredRows.data ?? []).length;
+  const recoveredRevenue = (recoveredRows.data ?? []).reduce(
+    (sum, row) => sum + (row.total_price ?? 0),
+    0,
+  );
+
+  return {
+    carts: list.data ?? [],
+    total: list.count ?? 0,
+    page,
+    perPage: CARTS_PER_PAGE,
+    kpis: {
+      abandoned: abandoned.count ?? 0,
+      reachedCheckout: reached.count ?? 0,
+      recovered: recoveredCount,
+      recoveredRevenue,
+      converted: converted.count ?? 0,
+      contacted: contacted.count ?? 0,
+    },
+  };
+}

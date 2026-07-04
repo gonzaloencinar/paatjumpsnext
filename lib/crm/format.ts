@@ -71,6 +71,24 @@ export const ORDER_FULFILLMENT_STATUS: Record<
   restocked: { label: "Devuelto a stock", badge: "secondary" },
 };
 
+// Estados del ciclo de un carrito/checkout (webhook + tracking storefront)
+export const CHECKOUT_STATUS: Record<
+  string,
+  { label: string; badge: BadgeVariant }
+> = {
+  abandoned: { label: "Abandonado", badge: "outline" },
+  reached_checkout: { label: "En checkout", badge: "secondary" },
+  recovered: { label: "Recuperado", badge: "default" },
+  converted: { label: "Convertido", badge: "secondary" },
+};
+
+// De dónde salió el carrito: checkout de Shopify o carrito de la web (pre-
+// checkout, identificado por la cookie pj_contact)
+export const CHECKOUT_ORIGIN: Record<string, string> = {
+  shopify: "Checkout",
+  storefront: "Web",
+};
+
 export const EMAIL_SEND_STATUS: Record<
   string,
   { label: string; badge: BadgeVariant }

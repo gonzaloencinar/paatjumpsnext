@@ -32,7 +32,7 @@ export default function CartModal() {
   const locale = useLocale();
   const t = useDictionary();
   // Zona de envío según geo-IP (lib/shipping.ts): Península/Baleares gratis
-  // desde 40 € (si no 5,90 €), Canarias/Ceuta/Melilla y UE/UK gratis desde
+  // desde 35 € (si no 5,90 €), Canarias/Ceuta/Melilla y UE/UK gratis desde
   // 100 € (si no 14,90 €). null = destino sin envío gratis → ocultamos la UI.
   const zone = useShippingZone();
   const showFreeShipping = zone !== null;

@@ -12,6 +12,7 @@ type CrmEmail = {
   campaignId?: string | null;
   automationId?: string | null;
   automationStepId?: string | null;
+  checkoutId?: number | null; // emails de recuperación → su carrito (/admin/carts)
   idempotencyKey?: string;
 };
 
@@ -36,6 +37,7 @@ export async function sendCrmEmail(input: CrmEmail) {
       campaign_id: input.campaignId ?? null,
       automation_id: input.automationId ?? null,
       automation_step_id: input.automationStepId ?? null,
+      checkout_id: input.checkoutId ?? null,
       template: input.template,
       subject: input.subject,
       status: "queued",
