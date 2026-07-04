@@ -35,7 +35,31 @@ export async function saveShortLink(
     return { error: "El destino debe empezar por / o https://." };
   }
 
-  const row = {
+  // El slug nuevo no puede ser alias de otro enlace (redirigiría al ajeno)
+  let conflictQuery = supabase
+    .from("short_links")
+    .select("slug")
+    .contains("aliases", [slug]);
+  if (id) conflictQuery = conflictQuery.neq("id", id);
+  const { data: aliasConflict } = await conflictQuery.maybeSingle();
+  if (aliasConflict) {
+    return {
+      error: `"${slug}" ya redirige a /l/${aliasConflict.slug} (es un alias suyo).`,
+    };
+  }
+
+  const row: {
+    slug: string;
+    destination: string;
+    utm_source: string | null;
+    utm_medium: string | null;
+    utm_campaign: string | null;
+    utm_term: string | null;
+    utm_content: string | null;
+    notes: string | null;
+    updated_at: string;
+    aliases?: string[];
+  } = {
     slug,
     destination,
     utm_source: optional(formData, "utm_source"),
@@ -46,6 +70,22 @@ export async function saveShortLink(
     notes: optional(formData, "notes"),
     updated_at: new Date().toISOString(),
   };
+
+  // Renombrar el slug no rompe lo publicado: el antiguo queda como alias del
+  // mismo enlace (redirige igual y suma el clic aquí, sin fila propia).
+  if (id) {
+    const { data: current } = await supabase
+      .from("short_links")
+      .select("slug, aliases")
+      .eq("id", id)
+      .maybeSingle();
+    if (current && current.slug !== slug) {
+      const aliases = new Set(current.aliases ?? []);
+      aliases.add(current.slug);
+      aliases.delete(slug); // por si recupera un nombre que era alias
+      row.aliases = [...aliases];
+    }
+  }
 
   const { error } = id
     ? await supabase.from("short_links").update(row).eq("id", id)

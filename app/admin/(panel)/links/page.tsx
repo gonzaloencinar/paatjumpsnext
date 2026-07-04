@@ -80,6 +80,12 @@ export default async function LinksPage() {
                         <div className="flex items-center gap-1">
                           <div className="flex min-w-0 flex-col">
                             <span className="font-medium">/l/{link.slug}</span>
+                            {link.aliases.length > 0 ? (
+                              <span className="truncate text-xs text-muted-foreground">
+                                también{" "}
+                                {link.aliases.map((a) => `/l/${a}`).join(", ")}
+                              </span>
+                            ) : null}
                             {link.notes ? (
                               <span className="truncate text-xs text-muted-foreground">
                                 {link.notes}

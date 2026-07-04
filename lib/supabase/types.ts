@@ -321,6 +321,7 @@ export type Database = {
           id: number;
           last_event_at: string | null;
           line_items: Json | null;
+          origin: string;
           recovery_sent_at: string | null;
           recovery_url: string | null;
           status: string;
@@ -338,6 +339,7 @@ export type Database = {
           id: number;
           last_event_at?: string | null;
           line_items?: Json | null;
+          origin?: string;
           recovery_sent_at?: string | null;
           recovery_url?: string | null;
           status?: string;
@@ -355,6 +357,7 @@ export type Database = {
           id?: number;
           last_event_at?: string | null;
           line_items?: Json | null;
+          origin?: string;
           recovery_sent_at?: string | null;
           recovery_url?: string | null;
           status?: string;
@@ -877,6 +880,7 @@ export type Database = {
       };
       short_links: {
         Row: {
+          aliases: string[];
           clicks: number;
           created_at: string;
           destination: string;
@@ -892,6 +896,7 @@ export type Database = {
           utm_term: string | null;
         };
         Insert: {
+          aliases?: string[];
           clicks?: number;
           created_at?: string;
           destination?: string;
@@ -907,6 +912,7 @@ export type Database = {
           utm_term?: string | null;
         };
         Update: {
+          aliases?: string[];
           clicks?: number;
           created_at?: string;
           destination?: string;
