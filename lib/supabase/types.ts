@@ -716,6 +716,7 @@ export type Database = {
           total_refunded: number;
           total_shipping: number | null;
           total_tax: number | null;
+          upsell_revenue: number;
           utm_campaign: string | null;
           utm_content: string | null;
           utm_medium: string | null;
@@ -765,6 +766,7 @@ export type Database = {
           total_refunded?: number;
           total_shipping?: number | null;
           total_tax?: number | null;
+          upsell_revenue?: number;
           utm_campaign?: string | null;
           utm_content?: string | null;
           utm_medium?: string | null;
@@ -814,6 +816,7 @@ export type Database = {
           total_refunded?: number;
           total_shipping?: number | null;
           total_tax?: number | null;
+          upsell_revenue?: number;
           utm_campaign?: string | null;
           utm_content?: string | null;
           utm_medium?: string | null;

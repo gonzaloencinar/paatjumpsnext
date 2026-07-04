@@ -136,6 +136,10 @@ type GqlOrder = {
       variantTitle: string | null;
       originalUnitPriceSet: { shopMoney: { amount: string } } | null;
       product: { legacyResourceId: string } | null;
+      discountAllocations: {
+        allocatedAmountSet: { shopMoney: { amount: string } } | null;
+        discountApplication: { __typename: string };
+      }[];
     }[];
   };
   customerJourneySummary: {
@@ -230,6 +234,16 @@ const ORDERS_QUERY = /* GraphQL */ `
             product {
               legacyResourceId
             }
+            discountAllocations {
+              allocatedAmountSet {
+                shopMoney {
+                  amount
+                }
+              }
+              discountApplication {
+                __typename
+              }
+            }
           }
         }
         customerJourneySummary {
@@ -260,6 +274,34 @@ const ORDERS_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+type GqlLineItem = GqlOrder["lineItems"]["nodes"][number];
+
+// Upsell post-compra (ReConvert): el descuento del changeset llega como
+// ManualDiscountApplication sobre la línea añadida; los códigos promo son
+// DiscountCodeApplication y no se confunden con esto. Mismo criterio que el
+// webhook (app/api/webhooks/shopify/route.ts).
+function isUpsellLine(item: GqlLineItem) {
+  return item.discountAllocations.some(
+    (a) => a.discountApplication.__typename === "ManualDiscountApplication",
+  );
+}
+
+function upsellRevenue(order: GqlOrder) {
+  let total = 0;
+  for (const item of order.lineItems.nodes) {
+    if (!isUpsellLine(item)) continue;
+    const discounted = item.discountAllocations.reduce(
+      (sum, a) => sum + (Number(a.allocatedAmountSet?.shopMoney?.amount) || 0),
+      0,
+    );
+    total +=
+      (Number(item.originalUnitPriceSet?.shopMoney?.amount) || 0) *
+        item.quantity -
+      discounted;
+  }
+  return Math.round(total * 100) / 100;
+}
 
 function mapOrder(order: GqlOrder, contactId: string | null) {
   // Atribución: los atributos "_utm_*" que fijó la tienda mandan; el customer
@@ -316,7 +358,9 @@ function mapOrder(order: GqlOrder, contactId: string | null) {
       price: item.originalUnitPriceSet?.shopMoney?.amount ?? null,
       sku: item.sku,
       product_id: item.product ? Number(item.product.legacyResourceId) : null,
+      ...(isUpsellLine(item) ? { upsell: true } : {}),
     })) as Json,
+    upsell_revenue: upsellRevenue(order),
     utm_source: attr("utm_source") ?? journeyLast?.utmParameters?.source ?? null,
     utm_medium: attr("utm_medium") ?? journeyLast?.utmParameters?.medium ?? null,
     utm_campaign:

@@ -63,6 +63,10 @@ type OrderPayload = {
   customer?: { id?: number; email?: string | null } | null;
   shipping_address?: OrderAddress | null;
   billing_address?: OrderAddress | null;
+  discount_applications?: {
+    type?: string;
+    title?: string | null;
+  }[];
   line_items?: {
     title?: string;
     quantity?: number;
@@ -70,6 +74,10 @@ type OrderPayload = {
     sku?: string | null;
     variant_title?: string | null;
     product_id?: number | null;
+    discount_allocations?: {
+      amount?: string;
+      discount_application_index?: number;
+    }[];
   }[];
 };
 
@@ -213,14 +221,35 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
   };
 
   const address = order.shipping_address ?? order.billing_address ?? {};
-  const lineItems = (order.line_items ?? []).slice(0, 50).map((item) => ({
-    title: item.title ?? "",
-    variant: item.variant_title ?? null,
-    quantity: item.quantity ?? 1,
-    price: item.price ?? null,
-    sku: item.sku ?? null,
-    product_id: item.product_id ?? null,
-  }));
+
+  // Upsell post-compra (ReConvert): el descuento del changeset llega como
+  // discount_application de tipo "manual" asignado a la línea añadida; los
+  // códigos promo llegan como "discount_code" y no se confunden con esto.
+  const applications = order.discount_applications ?? [];
+  let upsellRevenue = 0;
+  const lineItems = (order.line_items ?? []).slice(0, 50).map((item) => {
+    const allocations = item.discount_allocations ?? [];
+    const upsell = allocations.some(
+      (a) => applications[a.discount_application_index ?? -1]?.type === "manual",
+    );
+    if (upsell) {
+      const discounted = allocations.reduce(
+        (sum, a) => sum + (Number(a.amount) || 0),
+        0,
+      );
+      upsellRevenue +=
+        (Number(item.price) || 0) * (item.quantity ?? 1) - discounted;
+    }
+    return {
+      title: item.title ?? "",
+      variant: item.variant_title ?? null,
+      quantity: item.quantity ?? 1,
+      price: item.price ?? null,
+      sku: item.sku ?? null,
+      product_id: item.product_id ?? null,
+      ...(upsell ? { upsell: true } : {}),
+    };
+  });
 
   await supabase.from("orders").upsert({
     id: order.id,
@@ -252,6 +281,7 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
     shipping_country: address.country ?? null,
     shipping_country_code: address.country_code ?? null,
     line_items: lineItems,
+    upsell_revenue: Math.round(upsellRevenue * 100) / 100,
     utm_source: attr("utm_source"),
     utm_medium: attr("utm_medium"),
     utm_campaign: attr("utm_campaign"),

@@ -173,6 +173,29 @@ export default async function AnalyticsPage({
       hint: "Ingresos netos / pedidos del periodo",
     },
     {
+      label: "Upsell post-compra",
+      value: formatMoney(data.period.upsellRevenue),
+      hint:
+        data.period.upsellOrders > 0 ? (
+          <span className="inline-flex flex-wrap gap-x-2">
+            <span>
+              {nf.format(data.period.upsellOrders)}{" "}
+              {data.period.upsellOrders === 1 ? "pedido" : "pedidos"} ·{" "}
+              {nf1.format(
+                (data.period.upsellOrders / data.period.orders) * 100,
+              )}
+              % de aceptación
+            </span>
+            <Delta
+              current={data.period.upsellRevenue}
+              previous={data.period.prevUpsellRevenue}
+            />
+          </span>
+        ) : (
+          "Oferta 1-clic tras el pago (ReConvert)"
+        ),
+    },
+    {
       label: "Clientes del periodo",
       value: nf.format(data.period.newCustomers + data.period.returningCustomers),
       hint: `${nf.format(data.period.newCustomers)} nuevos · ${nf.format(

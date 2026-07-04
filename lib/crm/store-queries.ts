@@ -134,6 +134,7 @@ type AnalyticsOrder = {
   shipping_country: string | null;
   shipping_country_code: string | null;
   line_items: unknown;
+  upsell_revenue: number | null;
 };
 
 type LineItem = {
@@ -189,7 +190,7 @@ export async function getStoreAnalytics(days: number | null) {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, created_at, total_price, total_refunded, customer_id, email, utm_source, utm_medium, utm_campaign, first_utm_source, discount_code, shipping_province, shipping_country, shipping_country_code, line_items",
+      "id, created_at, total_price, total_refunded, customer_id, email, utm_source, utm_medium, utm_campaign, first_utm_source, discount_code, shipping_province, shipping_country, shipping_country_code, line_items, upsell_revenue",
     )
     .eq("test", false)
     .is("cancelled_at", null)
@@ -317,6 +318,15 @@ export async function getStoreAnalytics(days: number | null) {
       prevRevenue,
       prevOrders: inPrevious.length,
       withDiscount: inPeriod.filter((o) => o.discount_code).length,
+      upsellRevenue: inPeriod.reduce(
+        (sum, o) => sum + (o.upsell_revenue ?? 0),
+        0,
+      ),
+      upsellOrders: inPeriod.filter((o) => (o.upsell_revenue ?? 0) > 0).length,
+      prevUpsellRevenue: inPrevious.reduce(
+        (sum, o) => sum + (o.upsell_revenue ?? 0),
+        0,
+      ),
     },
     lifetime: {
       customers: customerCount,
