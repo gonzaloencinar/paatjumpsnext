@@ -5,7 +5,7 @@
 //
 // Reglas + tarifas (decisión del usuario, jul-2026; espejo de lo configurado
 // en Shopify):
-//   · España Península + Baleares → gratis desde 45 €, si no 5,90 €
+//   · España Península + Baleares → gratis desde 40 €, si no 5,90 €
 //   · Canarias, Ceuta y Melilla    → gratis desde 100 €, si no 14,90 €
 //   · Resto de la UE + Reino Unido → gratis desde 100 €, si no 14,90 €
 //   · Resto del mundo              → sin envío gratis prometido (zona oculta)
@@ -13,7 +13,7 @@
 // ⚠️ Reino Unido: el mercado/envío aún no existe en Shopify (pendiente); la UI
 // lo estima igual que la UE, pero el checkout de GB puede no funcionar todavía.
 
-export const ES_MAINLAND_THRESHOLD = 45;
+export const ES_MAINLAND_THRESHOLD = 40;
 export const HIGH_THRESHOLD = 100;
 
 const ES_MAINLAND_SHIPPING = 5.9;
@@ -27,7 +27,7 @@ export type ShippingZone = {
 };
 
 // Subdivisiones ISO 3166-2:ES (tal como las reporta el geo-IP de Vercel/MaxMind)
-// de los territorios que tributan al umbral de 100 € en vez de 45 €. Metemos
+// de los territorios que tributan al umbral de 100 € en vez de 40 €. Metemos
 // tanto el código de comunidad como el de provincia porque la fuente puede
 // devolver cualquiera de los dos niveles.
 const ES_HIGH_THRESHOLD_REGIONS = new Set([
