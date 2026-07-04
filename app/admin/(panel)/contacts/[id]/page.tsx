@@ -45,16 +45,14 @@ export default async function ContactDetailPage({
   const { id } = await params;
   const detail = await getContactDetail(id);
   if (!detail) notFound();
-  const { contact, events, codes, orders, sends } = detail;
+  const { contact, events, codes, orders, sends, phone } = detail;
 
   return (
     <div className="flex flex-col">
       <PageHeader
         title={contactDisplayName(contact)}
         description={contact.first_name ? contact.email : undefined}
-        actions={
-          <ContactActions contactId={contact.id} status={contact.status} />
-        }
+        actions={<ContactActions contact={contact} />}
       />
 
       <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -141,6 +139,18 @@ export default async function ContactDetailPage({
                     </span>
                   </InfoRow>
                   <InfoRow label="Nombre">{contact.first_name ?? "—"}</InfoRow>
+                  <InfoRow label="Teléfono">
+                    {phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        className="font-mono text-xs transition-colors hover:text-orange-400"
+                      >
+                        {phone}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </InfoRow>
                   <InfoRow label="Origen">{contact.source ?? "—"}</InfoRow>
                   <InfoRow label="Alta">
                     {formatDateTime(contact.created_at)}

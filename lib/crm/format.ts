@@ -139,6 +139,7 @@ export const SUPPRESSION_REASON: Record<string, string> = {
 export const EVENT_TYPE_LABEL: Record<string, string> = {
   signup: "Alta de contacto",
   status_changed: "Cambio de estado",
+  contact_updated: "Datos editados",
   cart_created: "Carrito creado",
   checkout_abandoned: "Checkout abandonado",
   checkout_recovered: "Checkout recuperado",

@@ -94,6 +94,91 @@ export async function addContact(
   return { ok: true };
 }
 
+export async function updateContact(
+  contactId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  if (!EMAIL_RE.test(email)) return { error: "Email no válido." };
+
+  const { data: current } = await supabase
+    .from("contacts")
+    .select("id, email, first_name")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (!current) return { error: "El contacto no existe." };
+
+  const { error } = await supabase
+    .from("contacts")
+    .update({ email, first_name: firstName || null })
+    .eq("id", contactId);
+  if (error) {
+    return {
+      error:
+        error.code === "23505"
+          ? "Ya hay otro contacto con ese email."
+          : "No se pudo guardar el contacto.",
+    };
+  }
+
+  if (email !== current.email || (firstName || null) !== current.first_name) {
+    await supabase.from("events").insert({
+      contact_id: contactId,
+      type: "contact_updated",
+      payload: {
+        from: { email: current.email, first_name: current.first_name },
+        to: { email, first_name: firstName || null },
+        by: "admin",
+      },
+    });
+  }
+
+  revalidatePath(`/admin/contacts/${contactId}`);
+  revalidatePath("/admin/contacts");
+  return { ok: true };
+}
+
+export async function deleteContact(contactId: string): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (!contact) return { error: "El contacto no existe." };
+
+  // El histórico de negocio sobrevive desvinculado (pedidos, checkouts,
+  // códigos, emails: sus FK no llevan cascade a propósito); events,
+  // automation_enrollments y campaign_recipients sí caen en cascada.
+  // La supresión (si existe) se conserva: borrar el contacto no debe
+  // rehabilitar envíos a ese email.
+  const unlinks = [
+    supabase.from("orders").update({ contact_id: null }),
+    supabase.from("checkouts").update({ contact_id: null }),
+    supabase.from("discount_codes").update({ contact_id: null }),
+    supabase.from("email_sends").update({ contact_id: null }),
+  ];
+  for (const unlink of unlinks) {
+    const { error } = await unlink.eq("contact_id", contactId);
+    if (error) return { error: "No se pudo desvincular su histórico." };
+  }
+
+  const { error } = await supabase
+    .from("contacts")
+    .delete()
+    .eq("id", contactId);
+  if (error) return { error: "No se pudo eliminar el contacto." };
+
+  revalidatePath("/admin/contacts");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 export async function setContactStatus(
   contactId: string,
   status: "subscribed" | "unsubscribed",

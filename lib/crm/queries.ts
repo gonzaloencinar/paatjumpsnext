@@ -208,7 +208,7 @@ export async function getContactDetail(id: string) {
     .maybeSingle();
   if (!contact) return null;
 
-  const [events, codes, orders, sends] = await Promise.all([
+  const [events, codes, orders, sends, customer] = await Promise.all([
     supabase
       .from("events")
       .select("*")
@@ -231,6 +231,15 @@ export async function getContactDetail(id: string) {
       .eq("contact_id", id)
       .order("created_at", { ascending: false })
       .limit(50),
+    // Teléfono: vive en la ficha de cliente sincronizada de Shopify (lo dan
+    // al comprar), no en contacts.
+    contact.shopify_customer_id
+      ? supabase
+          .from("customers")
+          .select("phone")
+          .eq("id", Number(contact.shopify_customer_id))
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   return {
@@ -239,6 +248,7 @@ export async function getContactDetail(id: string) {
     codes: codes.data ?? [],
     orders: orders.data ?? [],
     sends: sends.data ?? [],
+    phone: customer.data?.phone ?? null,
   };
 }
 

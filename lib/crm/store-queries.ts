@@ -66,7 +66,7 @@ export async function listCustomers(params: { q?: string; page?: number }) {
   let query = supabase
     .from("customers")
     .select(
-      "id, email, first_name, last_name, orders_count, total_spent, currency, city, province, country, country_code, accepts_email_marketing, shopify_created_at",
+      "id, email, first_name, last_name, phone, orders_count, total_spent, currency, city, province, country, country_code, accepts_email_marketing, shopify_created_at",
       { count: "exact" },
     )
     .order("total_spent", { ascending: false })
@@ -150,7 +150,8 @@ export type BreakdownRow = {
   revenue: number;
 };
 
-const net = (o: AnalyticsOrder) => (o.total_price ?? 0) - (o.total_refunded ?? 0);
+const net = (o: AnalyticsOrder) =>
+  (o.total_price ?? 0) - (o.total_refunded ?? 0);
 
 function median(values: number[]) {
   if (values.length === 0) return null;
@@ -205,13 +206,9 @@ export async function getStoreAnalytics(days: number | null) {
   const startIso = new Date(startMs).toISOString();
   const prevStartIso = new Date(prevStartMs).toISOString();
 
-  const inPeriod = days
-    ? all.filter((o) => o.created_at >= startIso)
-    : all;
+  const inPeriod = days ? all.filter((o) => o.created_at >= startIso) : all;
   const inPrevious = days
-    ? all.filter(
-        (o) => o.created_at >= prevStartIso && o.created_at < startIso,
-      )
+    ? all.filter((o) => o.created_at >= prevStartIso && o.created_at < startIso)
     : [];
 
   // Pedidos por cliente (histórico completo; llegan ordenados por fecha)
@@ -345,15 +342,10 @@ export async function getStoreAnalytics(days: number | null) {
       o.first_utm_source ? { key: o.first_utm_source } : null,
     ).slice(0, 8),
     campaigns: groupBy(inPeriod, (o) =>
-      o.utm_campaign
-        ? { key: o.utm_campaign, detail: o.utm_source }
-        : null,
+      o.utm_campaign ? { key: o.utm_campaign, detail: o.utm_source } : null,
     ).slice(0, 10),
     countries: groupBy(inPeriod, (o) => ({
-      key:
-        o.shipping_country ??
-        o.shipping_country_code ??
-        "(sin dirección)",
+      key: o.shipping_country ?? o.shipping_country_code ?? "(sin dirección)",
     })).slice(0, 10),
     provinces: groupBy(
       inPeriod.filter((o) => o.shipping_country_code === "ES"),

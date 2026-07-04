@@ -150,12 +150,7 @@ type GqlOrder = {
 
 const ORDERS_QUERY = /* GraphQL */ `
   query SyncOrders($cursor: String, $search: String) {
-    orders(
-      first: 50
-      after: $cursor
-      query: $search
-      sortKey: UPDATED_AT
-    ) {
+    orders(first: 50, after: $cursor, query: $search, sortKey: UPDATED_AT) {
       pageInfo {
         hasNextPage
         endCursor
@@ -361,8 +356,10 @@ function mapOrder(order: GqlOrder, contactId: string | null) {
       ...(isUpsellLine(item) ? { upsell: true } : {}),
     })) as Json,
     upsell_revenue: upsellRevenue(order),
-    utm_source: attr("utm_source") ?? journeyLast?.utmParameters?.source ?? null,
-    utm_medium: attr("utm_medium") ?? journeyLast?.utmParameters?.medium ?? null,
+    utm_source:
+      attr("utm_source") ?? journeyLast?.utmParameters?.source ?? null,
+    utm_medium:
+      attr("utm_medium") ?? journeyLast?.utmParameters?.medium ?? null,
     utm_campaign:
       attr("utm_campaign") ?? journeyLast?.utmParameters?.campaign ?? null,
     utm_term: attr("utm_term") ?? journeyLast?.utmParameters?.term ?? null,
@@ -382,8 +379,7 @@ function mapOrder(order: GqlOrder, contactId: string | null) {
       null,
     first_landing_page:
       attr("first_landing_page") ?? journeyFirst?.landingPage ?? null,
-    first_referrer:
-      attr("first_referrer") ?? journeyFirst?.referrerUrl ?? null,
+    first_referrer: attr("first_referrer") ?? journeyFirst?.referrerUrl ?? null,
     created_at: order.createdAt,
     processed_at: order.processedAt,
     synced_at: new Date().toISOString(),
@@ -488,6 +484,7 @@ type GqlCustomer = {
   tags: string[];
   emailMarketingConsent: { marketingState: string } | null;
   defaultAddress: {
+    phone: string | null;
     city: string | null;
     province: string | null;
     provinceCode: string | null;
@@ -499,12 +496,7 @@ type GqlCustomer = {
 
 const CUSTOMERS_QUERY = /* GraphQL */ `
   query SyncCustomers($cursor: String, $search: String) {
-    customers(
-      first: 100
-      after: $cursor
-      query: $search
-      sortKey: UPDATED_AT
-    ) {
+    customers(first: 100, after: $cursor, query: $search, sortKey: UPDATED_AT) {
       pageInfo {
         hasNextPage
         endCursor
@@ -529,6 +521,7 @@ const CUSTOMERS_QUERY = /* GraphQL */ `
           marketingState
         }
         defaultAddress {
+          phone
           city
           province
           provinceCode
@@ -570,7 +563,9 @@ export async function syncShopifyCustomers({ full = false } = {}) {
         email: customer.email?.trim().toLowerCase() || null,
         first_name: customer.firstName,
         last_name: customer.lastName,
-        phone: customer.phone,
+        // El teléfono del checkout suele quedar en la dirección, no en el
+        // campo phone del cliente — nos vale cualquiera de los dos.
+        phone: customer.phone ?? customer.defaultAddress?.phone ?? null,
         note: customer.note,
         verified_email: customer.verifiedEmail,
         orders_count: Number(customer.numberOfOrders) || 0,

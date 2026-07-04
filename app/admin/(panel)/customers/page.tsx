@@ -38,12 +38,10 @@ export default async function CustomersPage({
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const sp = await searchParams;
-  const { customers, lastOrderAt, total, page, perPage } = await listCustomers(
-    {
-      q: sp.q,
-      page: Number(sp.page) || 1,
-    },
-  );
+  const { customers, lastOrderAt, total, page, perPage } = await listCustomers({
+    q: sp.q,
+    page: Number(sp.page) || 1,
+  });
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const filtering = Boolean(sp.q);
 
@@ -148,9 +146,14 @@ export default async function CustomersPage({
                                 className="size-3 text-muted-foreground"
                               />
                             </span>
-                            {name && customer.email ? (
+                            {(name && customer.email) || customer.phone ? (
                               <span className="truncate text-xs text-muted-foreground">
-                                {name}
+                                {[
+                                  name && customer.email ? name : null,
+                                  customer.phone,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </span>
                             ) : null}
                           </a>
