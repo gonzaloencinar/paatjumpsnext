@@ -2,6 +2,12 @@ import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon, UsersIcon } from "lucide-react";
 import { AddContactDialog } from "@/components/admin/add-contact-dialog";
 import { ContactRowActions } from "@/components/admin/contact-actions";
+import {
+  BulkEmailBar,
+  ContactSelectAllCheckbox,
+  ContactSelectCheckbox,
+  ContactsSelectionProvider,
+} from "@/components/admin/contacts-bulk";
 import { ContactsToolbar } from "@/components/admin/contacts-toolbar";
 import { PageHeader } from "@/components/admin/page-header";
 import { ContactStatusBadge } from "@/components/admin/status-badges";
@@ -110,11 +116,17 @@ export default async function ContactsPage({
             </EmptyHeader>
           </Empty>
         ) : (
-          <>
+          <ContactsSelectionProvider>
+            <BulkEmailBar />
             <div className="overflow-hidden rounded-xl border">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <ContactSelectAllCheckbox
+                        pageIds={contacts.map((c) => c.id)}
+                      />
+                    </TableHead>
                     <TableHead>Contacto</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="hidden md:table-cell">
@@ -134,6 +146,12 @@ export default async function ContactsPage({
                 <TableBody>
                   {contacts.map((contact) => (
                     <TableRow key={contact.id}>
+                      <TableCell>
+                        <ContactSelectCheckbox
+                          id={contact.id}
+                          email={contact.email}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Link
                           href={`/admin/contacts/${contact.id}`}
@@ -207,7 +225,7 @@ export default async function ContactsPage({
                 </div>
               </div>
             ) : null}
-          </>
+          </ContactsSelectionProvider>
         )}
       </div>
     </div>

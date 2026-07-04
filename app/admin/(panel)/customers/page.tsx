@@ -6,6 +6,7 @@ import {
   ExternalLinkIcon,
   SearchIcon,
 } from "lucide-react";
+import { EmailCustomerButton } from "@/components/admin/contact-actions";
 import { PageHeader } from "@/components/admin/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,6 +123,9 @@ export default async function CustomersPage({
                     <TableHead className="hidden text-right md:table-cell">
                       Último pedido
                     </TableHead>
+                    <TableHead className="w-12 text-right">
+                      <span className="sr-only">Acciones</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -200,6 +204,11 @@ export default async function CustomersPage({
                         </TableCell>
                         <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
                           {last ? formatDate(last) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {customer.email ? (
+                            <EmailCustomerButton email={customer.email} />
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     );

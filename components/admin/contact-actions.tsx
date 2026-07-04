@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
+  MailIcon,
   PencilIcon,
   Trash2Icon,
   UserCheckIcon,
@@ -11,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  createCampaignFromContacts,
+  createCampaignFromCustomerEmail,
   deleteContact,
   setContactStatus,
   updateContact,
@@ -227,6 +230,31 @@ export function ContactRowActions({ contact }: { contact: ContactSummary }) {
   );
 }
 
+// Sobre en la fila de /admin/customers: email 1-a-1 al cliente, si su email
+// ya es contacto suscrito del CRM (la acción valida y explica si no).
+export function EmailCustomerButton({ email }: { email: string }) {
+  const [pending, startTransition] = useTransition();
+
+  function compose() {
+    startTransition(async () => {
+      const result = await createCampaignFromCustomerEmail(email);
+      if (result?.error) toast.error(result.error);
+    });
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Enviar email a ${email}`}
+      disabled={pending}
+      onClick={compose}
+    >
+      {pending ? <Spinner /> : <MailIcon />}
+    </Button>
+  );
+}
+
 // Menú de la ficha del contacto (/admin/contacts/[id]).
 export function ContactActions({ contact }: { contact: ContactSummary }) {
   const [pending, startTransition] = useTransition();
@@ -248,6 +276,14 @@ export function ContactActions({ contact }: { contact: ContactSummary }) {
     });
   }
 
+  // Campaña borrador para este contacto; la acción redirige al editor.
+  function composeEmail() {
+    startTransition(async () => {
+      const result = await createCampaignFromContacts([contact.id]);
+      if (result?.error) toast.error(result.error);
+    });
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -262,6 +298,13 @@ export function ContactActions({ contact }: { contact: ContactSummary }) {
         />
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
+            <DropdownMenuItem
+              disabled={contact.status !== "subscribed"}
+              onClick={composeEmail}
+            >
+              <MailIcon />
+              Enviar email
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <PencilIcon />
               Editar datos

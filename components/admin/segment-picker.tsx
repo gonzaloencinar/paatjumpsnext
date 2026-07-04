@@ -85,6 +85,23 @@ export function SegmentPicker({
 
       <input type="hidden" name="segment_json" value={JSON.stringify(facets)} />
 
+      {facets.ids?.length ? (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">
+            {facets.ids.length === 1
+              ? "1 contacto elegido a mano"
+              : `${facets.ids.length} contactos elegidos a mano`}
+          </Badge>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => patch({ ids: undefined })}
+          >
+            Quitar selección
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <select
           aria-label="Tipo de contacto"
@@ -117,7 +134,9 @@ export function SegmentPicker({
           }
         >
           <option value="">Cualquier actividad</option>
-          <option value="activos">Activos — abren/clican ≤{ACTIVITY_DAYS} d</option>
+          <option value="activos">
+            Activos — abren/clican ≤{ACTIVITY_DAYS} d
+          </option>
           <option value="dormidos">Dormidos — nada en {ACTIVITY_DAYS} d</option>
         </select>
 

@@ -10,6 +10,7 @@ import {
   describeFacets,
   materializeCampaignAudience,
   parseFacets,
+  sanitizeContactIds,
   type SegmentFacets,
 } from "@/lib/crm/segments";
 import { sendCrmEmail } from "@/lib/email/send";
@@ -274,6 +275,64 @@ export async function countAudienceAction(
 ): Promise<number> {
   const supabase = await requireAdmin();
   return countSegmentAudience(supabase, parseFacets(facets));
+}
+
+// Email a contactos elegidos a mano (selección en /admin/contacts o botón
+// de la ficha): campaña borrador con la faceta ids — mismo flujo de
+// redactar/probar/enviar y mismas garantías (suscritos + supresiones).
+export async function createCampaignFromContacts(
+  rawIds: string[],
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const ids = sanitizeContactIds(rawIds);
+  if (ids.length === 0) return { error: "No hay contactos seleccionados." };
+
+  const { data: sample } = await supabase
+    .from("contacts")
+    .select("email")
+    .in("id", ids)
+    .limit(1);
+  const name =
+    ids.length === 1 && sample?.[0]
+      ? `Email a ${sample[0].email}`
+      : `Email a ${ids.length} contactos`;
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({ name, segment: { ids } })
+    .select("id")
+    .single();
+  if (error) return { error: "No se pudo crear el email." };
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${data.id}`);
+}
+
+// Email a un cliente de Shopify (/admin/customers): solo si su email ya es
+// un contacto del CRM — sin contacto no hay consentimiento que respetar.
+export async function createCampaignFromCustomerEmail(
+  rawEmail: string,
+): Promise<ActionState> {
+  const supabase = await requireAdmin();
+  const email = rawEmail.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { error: "Email no válido." };
+
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, status")
+    .eq("email", email)
+    .maybeSingle();
+  if (!contact) {
+    return {
+      error:
+        "Este cliente no es contacto del CRM todavía — añádelo en Contactos primero.",
+    };
+  }
+  if (contact.status !== "subscribed") {
+    return {
+      error: "Este contacto no está suscrito: no se le pueden enviar emails.",
+    };
+  }
+  return createCampaignFromContacts([contact.id]);
 }
 
 // "Crear campaña con este filtro" desde /admin/contacts

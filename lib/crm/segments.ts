@@ -15,7 +15,25 @@ export type SegmentFacets = {
   alta_dias?: number;
   tag?: string;
   codigo?: string; // compró usando este código de descuento
+  ids?: string[]; // selección manual desde /admin/contacts (bulk email)
 };
+
+// Tope compartido con applySegment: por encima habría que trocear el .in()
+export const MAX_MANUAL_IDS = 500;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function sanitizeContactIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.filter(
+        (id): id is string => typeof id === "string" && UUID_RE.test(id),
+      ),
+    ),
+  ].slice(0, MAX_MANUAL_IDS);
+}
 
 type Client = SupabaseClient<Database>;
 
@@ -54,6 +72,8 @@ export function parseFacets(segment: Json | null | undefined): SegmentFacets {
   if (typeof raw.codigo === "string" && raw.codigo.trim()) {
     facets.codigo = raw.codigo.trim().toUpperCase();
   }
+  const ids = sanitizeContactIds(raw.ids);
+  if (ids.length > 0) facets.ids = ids;
   return facets;
 }
 
@@ -80,6 +100,13 @@ export function describeFacets(facets: SegmentFacets) {
   if (facets.alta_dias) parts.push(`alta ≤${facets.alta_dias} d`);
   if (facets.tag) parts.push(`tag ${facets.tag}`);
   if (facets.codigo) parts.push(`código ${facets.codigo}`);
+  if (facets.ids) {
+    parts.push(
+      facets.ids.length === 1
+        ? "1 contacto elegido a mano"
+        : `${facets.ids.length} contactos elegidos a mano`,
+    );
+  }
   return parts.length > 0 ? parts.join(" · ") : "todos los suscritos";
 }
 
@@ -153,6 +180,12 @@ export function applySegment<Q extends { eq: any }>(
     );
   }
   if (facets.tag) q = q.contains("tags", [facets.tag]);
+
+  // Selección manual: sigue pasando por status=subscribed (arriba), así una
+  // baja posterior a la selección queda fuera igualmente.
+  if (facets.ids && facets.ids.length > 0) {
+    q = q.in("id", facets.ids.slice(0, MAX_MANUAL_IDS));
+  }
 
   if (codigoIds) {
     // Límite defensivo para no reventar la URL de PostgREST; con más de 500
