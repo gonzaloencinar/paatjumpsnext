@@ -244,7 +244,7 @@ export function ShortLinkDialog({ link }: { link?: ShortLink }) {
                 <Input
                   id="link-campaign"
                   name="utm_campaign"
-                  placeholder="story-rebajas"
+                  placeholder="stories"
                   value={values.utm_campaign}
                   onChange={(e) => set("utm_campaign")(e.target.value)}
                 />

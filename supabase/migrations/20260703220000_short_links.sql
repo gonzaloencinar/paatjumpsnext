@@ -45,9 +45,9 @@ as $$
 $$;
 revoke execute on function public.register_link_click(text) from anon, authenticated;
 
--- Enlaces iniciales de Instagram
+-- Enlaces iniciales de Instagram (renombrados a "stories" el 2026-07-04)
 insert into public.short_links (slug, destination, utm_source, utm_medium, utm_campaign, notes)
 values
   ('bio', '/', 'instagram', 'social', 'bio', 'Biografía de Instagram'),
-  ('story', '/', 'instagram', 'social', 'story', 'Stories genéricas de Instagram')
+  ('stories', '/', 'instagram', 'social', 'stories', 'Stories genéricas de Instagram')
 on conflict (slug) do nothing;
