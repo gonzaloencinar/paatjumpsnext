@@ -190,8 +190,33 @@ export async function listContacts(params: {
 
   const { data, count, error } = await query;
   if (error) throw error;
+  const contacts = data ?? [];
+
+  // Teléfonos de la página (viven en la ficha de cliente de Shopify, no en
+  // contacts): un lookup por los contactos vinculados, mapeado por contact.id.
+  const phones = new Map<string, string>();
+  const linked = contacts.filter((c) => c.shopify_customer_id);
+  if (linked.length > 0) {
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, phone")
+      .in(
+        "id",
+        linked.map((c) => Number(c.shopify_customer_id)),
+      )
+      .not("phone", "is", null);
+    const byCustomer = new Map(
+      (customers ?? []).map((c) => [String(c.id), c.phone!]),
+    );
+    for (const contact of linked) {
+      const phone = byCustomer.get(contact.shopify_customer_id!);
+      if (phone) phones.set(contact.id, phone);
+    }
+  }
+
   return {
-    contacts: data ?? [],
+    contacts,
+    phones,
     total: count ?? 0,
     page,
     perPage: CONTACTS_PER_PAGE,

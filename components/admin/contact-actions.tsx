@@ -42,32 +42,196 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 
-export function ContactActions({
-  contact,
-}: {
-  contact: {
-    id: string;
-    email: string;
-    first_name: string | null;
-    status: string;
-  };
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+type ContactSummary = {
+  id: string;
+  email: string;
+  first_name: string | null;
+  status: string;
+};
 
-  const [editState, editAction, editPending] = useActionState(
+function EditContactDialog({
+  contact,
+  open,
+  onOpenChange,
+}: {
+  contact: ContactSummary;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [state, formAction, pending] = useActionState(
     updateContact.bind(null, contact.id),
     null,
   );
 
   useEffect(() => {
-    if (editState?.ok) {
+    if (state?.ok) {
       toast.success("Contacto guardado");
-      setEditOpen(false);
+      onOpenChange(false);
     }
-  }, [editState]);
+  }, [state, onOpenChange]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar contacto</DialogTitle>
+          <DialogDescription>
+            El cambio queda registrado en su timeline.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          key={String(open)}
+          action={formAction}
+          className="flex flex-col gap-6"
+        >
+          <FieldGroup>
+            <Field data-invalid={state?.error ? true : undefined}>
+              <FieldLabel htmlFor={`edit-email-${contact.id}`}>
+                Email
+              </FieldLabel>
+              <Input
+                id={`edit-email-${contact.id}`}
+                name="email"
+                type="email"
+                required
+                defaultValue={contact.email}
+                aria-invalid={state?.error ? true : undefined}
+              />
+              {state?.error ? <FieldError>{state.error}</FieldError> : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`edit-name-${contact.id}`}>
+                Nombre (opcional)
+              </FieldLabel>
+              <Input
+                id={`edit-name-${contact.id}`}
+                name="first_name"
+                defaultValue={contact.first_name ?? ""}
+              />
+            </Field>
+          </FieldGroup>
+
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button type="button" variant="outline">
+                  Cancelar
+                </Button>
+              }
+            />
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner data-icon="inline-start" />}
+              Guardar cambios
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteContactDialog({
+  contact,
+  open,
+  onOpenChange,
+  redirectTo,
+}: {
+  contact: ContactSummary;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  // Desde la ficha se vuelve a la lista; desde la lista basta el revalidate.
+  redirectTo?: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function confirm() {
+    startTransition(async () => {
+      const result = await deleteContact(contact.id);
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Contacto eliminado");
+        onOpenChange(false);
+        if (redirectTo) router.push(redirectTo);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>¿Eliminar {contact.email}?</DialogTitle>
+          <DialogDescription>
+            Se borra el contacto con su timeline e inscripciones. Sus pedidos,
+            códigos y emails enviados se conservan desvinculados, y si estaba en
+            supresiones sigue ahí. Esta acción no se puede deshacer.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose
+            render={
+              <Button type="button" variant="outline">
+                Cancelar
+              </Button>
+            }
+          />
+          <Button variant="destructive" onClick={confirm} disabled={pending}>
+            {pending && <Spinner data-icon="inline-start" />}
+            Eliminar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Acciones de la fila en /admin/contacts: editar y eliminar a mano.
+export function ContactRowActions({ contact }: { contact: ContactSummary }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <div className="flex justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Editar ${contact.email}`}
+          onClick={() => setEditOpen(true)}
+        >
+          <PencilIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Eliminar ${contact.email}`}
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2Icon />
+        </Button>
+      </div>
+      <EditContactDialog
+        contact={contact}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <DeleteContactDialog
+        contact={contact}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </>
+  );
+}
+
+// Menú de la ficha del contacto (/admin/contacts/[id]).
+export function ContactActions({ contact }: { contact: ContactSummary }) {
+  const [pending, startTransition] = useTransition();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   function change(next: "subscribed" | "unsubscribed") {
     startTransition(async () => {
@@ -80,18 +244,6 @@ export function ContactActions({
         );
       } catch {
         toast.error("No se pudo cambiar el estado");
-      }
-    });
-  }
-
-  function confirmDelete() {
-    startTransition(async () => {
-      const result = await deleteContact(contact.id);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success("Contacto eliminado");
-        router.push("/admin/contacts");
       }
     });
   }
@@ -140,93 +292,17 @@ export function ContactActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar contacto</DialogTitle>
-            <DialogDescription>
-              El cambio queda registrado en su timeline.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            key={String(editOpen)}
-            action={editAction}
-            className="flex flex-col gap-6"
-          >
-            <FieldGroup>
-              <Field data-invalid={editState?.error ? true : undefined}>
-                <FieldLabel htmlFor="edit-contact-email">Email</FieldLabel>
-                <Input
-                  id="edit-contact-email"
-                  name="email"
-                  type="email"
-                  required
-                  defaultValue={contact.email}
-                  aria-invalid={editState?.error ? true : undefined}
-                />
-                {editState?.error ? (
-                  <FieldError>{editState.error}</FieldError>
-                ) : null}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="edit-contact-name">
-                  Nombre (opcional)
-                </FieldLabel>
-                <Input
-                  id="edit-contact-name"
-                  name="first_name"
-                  defaultValue={contact.first_name ?? ""}
-                />
-              </Field>
-            </FieldGroup>
-
-            <DialogFooter>
-              <DialogClose
-                render={
-                  <Button type="button" variant="outline">
-                    Cancelar
-                  </Button>
-                }
-              />
-              <Button type="submit" disabled={editPending}>
-                {editPending && <Spinner data-icon="inline-start" />}
-                Guardar cambios
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>¿Eliminar {contact.email}?</DialogTitle>
-            <DialogDescription>
-              Se borra el contacto con su timeline e inscripciones. Sus pedidos,
-              códigos y emails enviados se conservan desvinculados, y si estaba
-              en supresiones sigue ahí. Esta acción no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose
-              render={
-                <Button type="button" variant="outline">
-                  Cancelar
-                </Button>
-              }
-            />
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              disabled={pending}
-            >
-              {pending && <Spinner data-icon="inline-start" />}
-              Eliminar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditContactDialog
+        contact={contact}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <DeleteContactDialog
+        contact={contact}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        redirectTo="/admin/contacts"
+      />
     </>
   );
 }

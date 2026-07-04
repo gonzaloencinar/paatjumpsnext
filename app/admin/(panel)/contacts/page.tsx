@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon, UsersIcon } from "lucide-react";
 import { AddContactDialog } from "@/components/admin/add-contact-dialog";
+import { ContactRowActions } from "@/components/admin/contact-actions";
 import { ContactsToolbar } from "@/components/admin/contacts-toolbar";
 import { PageHeader } from "@/components/admin/page-header";
 import { ContactStatusBadge } from "@/components/admin/status-badges";
@@ -42,7 +43,7 @@ export default async function ContactsPage({
   }>;
 }) {
   const sp = await searchParams;
-  const { contacts, total, page, perPage } = await listContacts({
+  const { contacts, phones, total, page, perPage } = await listContacts({
     q: sp.q,
     status: sp.status,
     page: Number(sp.page) || 1,
@@ -54,7 +55,12 @@ export default async function ContactsPage({
   });
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const filtering = Boolean(
-    sp.q || sp.status || sp.tipo || sp.actividad || sp.fuente || sp.alta ||
+    sp.q ||
+      sp.status ||
+      sp.tipo ||
+      sp.actividad ||
+      sp.fuente ||
+      sp.alta ||
       sp.tag,
   );
 
@@ -120,6 +126,9 @@ export default async function ContactsPage({
                     <TableHead className="hidden text-right md:table-cell">
                       Alta
                     </TableHead>
+                    <TableHead className="w-20 text-right">
+                      <span className="sr-only">Acciones</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -133,9 +142,11 @@ export default async function ContactsPage({
                           <span className="truncate font-medium">
                             {contact.email}
                           </span>
-                          {contact.first_name ? (
+                          {contact.first_name || phones.get(contact.id) ? (
                             <span className="truncate text-xs text-muted-foreground">
-                              {contact.first_name}
+                              {[contact.first_name, phones.get(contact.id)]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </span>
                           ) : null}
                         </Link>
@@ -148,6 +159,9 @@ export default async function ContactsPage({
                       </TableCell>
                       <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
                         {formatDate(contact.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <ContactRowActions contact={contact} />
                       </TableCell>
                     </TableRow>
                   ))}
