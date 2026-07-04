@@ -99,15 +99,15 @@ export default async function PromotionsPage() {
                             <code className="font-mono text-xs text-orange-400">
                               {promotion.code}
                             </code>
+                            {promotion.type === "affiliate" ? (
+                              <CopyAffiliateLinkButton
+                                url={`${baseUrl}/?code=${promotion.code}`}
+                              />
+                            ) : null}
                             {!promotion.shopify_discount_id ? (
                               <Badge variant="destructive">Sin sync</Badge>
                             ) : null}
                           </span>
-                          {promotion.type === "affiliate" ? (
-                            <CopyAffiliateLinkButton
-                              url={`${baseUrl}/?code=${promotion.code}`}
-                            />
-                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell>

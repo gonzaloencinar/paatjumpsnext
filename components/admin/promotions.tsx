@@ -241,16 +241,17 @@ export function PromotionDialog({ promotion }: { promotion?: Promotion }) {
   );
 }
 
-// Enlace de afiliado listo para compartir (paatjumps.com/?code=MARIA10). Al
-// entrar por él, el código se aplica solo al carrito y la web NO enseña la
+// Copia el enlace de afiliado (paatjumps.com/?code=MARIA10) al portapapeles.
+// Al entrar por él, el código se aplica solo al carrito y la web NO enseña la
 // promo general anunciada (no pisamos el descuento del afiliado); en su lugar
 // sale la barra de envío gratis. Ver proxy.ts y el layout de la tienda.
 export function CopyAffiliateLinkButton({ url }: { url: string }) {
   return (
     <Button
       variant="ghost"
-      size="xs"
-      className="w-fit max-w-full font-mono text-muted-foreground"
+      size="icon-xs"
+      className="text-muted-foreground"
+      aria-label="Copiar enlace de afiliado"
       title="Copiar enlace de afiliado"
       onClick={async () => {
         try {
@@ -261,8 +262,7 @@ export function CopyAffiliateLinkButton({ url }: { url: string }) {
         }
       }}
     >
-      <CopyIcon data-icon="inline-start" />
-      <span className="truncate">{url.replace(/^https?:\/\//, "")}</span>
+      <CopyIcon />
     </Button>
   );
 }
