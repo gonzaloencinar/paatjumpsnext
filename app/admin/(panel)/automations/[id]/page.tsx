@@ -115,6 +115,12 @@ export default async function AutomationDetailPage({
               email de bienvenida.
             </p>
           ) : null}
+          {automation.trigger === "checkout_abandoned" ? (
+            <p className="text-xs text-muted-foreground">
+              Cada checkout abandonado con email suscrito se inscribe solo; se
+              cancela si compra o vacía el carrito.
+            </p>
+          ) : null}
         </div>
 
         {steps.map((step, index) => (
@@ -125,6 +131,7 @@ export default async function AutomationDetailPage({
             stats={statsByStep.get(step.id) ?? null}
             index={index}
             total={steps.length}
+            cartTags={automation.trigger === "checkout_abandoned"}
           />
         ))}
 

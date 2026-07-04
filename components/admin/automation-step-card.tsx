@@ -50,12 +50,14 @@ export function AutomationStepCard({
   stats,
   index,
   total,
+  cartTags = false,
 }: {
   automationId: string;
   step: AutomationStep;
   stats: StepStats | null;
   index: number;
   total: number;
+  cartTags?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [enabled, setEnabled] = useState(step.enabled);
@@ -260,7 +262,17 @@ export function AutomationStepCard({
               />
               <FieldDescription>
                 Se envuelve con la plantilla de marca (cabecera, fondo oscuro,
-                baja). Admite <code className="font-mono">{"{{nombre}}"}</code>.
+                baja). Admite <code className="font-mono">{"{{nombre}}"}</code>
+                {cartTags ? (
+                  <>
+                    , <code className="font-mono">{"{{url_carrito}}"}</code>{" "}
+                    (enlace para retomar el checkout) y{" "}
+                    <code className="font-mono">{"{{productos_carrito}}"}</code>{" "}
+                    (resumen de lo que dejó; sin el tag se añade solo al final
+                    del email)
+                  </>
+                ) : null}
+                .
               </FieldDescription>
             </Field>
           </fieldset>

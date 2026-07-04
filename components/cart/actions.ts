@@ -15,10 +15,12 @@ import {
   updateCart,
   updateCartAttributes,
 } from "lib/shopify";
+import { trackStorefrontCart } from "lib/crm/local-cart";
 import { getPromotionByCode } from "lib/crm/promotions";
 import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 export async function addItem(
   prevState: any,
@@ -31,6 +33,9 @@ export async function addItem(
   try {
     await addToCart([{ merchandiseId: selectedVariantId, quantity: 1 }]);
     updateTag(TAGS.cart);
+    // Tras responder al cliente: carrito → CRM si el visitante está
+    // identificado (recuperación pre-checkout, lib/crm/local-cart.ts)
+    after(trackStorefrontCart);
   } catch (e) {
     return "Error adding item to cart";
   }
@@ -51,6 +56,7 @@ export async function removeItem(prevState: any, merchandiseId: string) {
     if (lineItem && lineItem.id) {
       await removeFromCart([lineItem.id]);
       updateTag(TAGS.cart);
+      after(trackStorefrontCart);
     } else {
       return "Item not found in cart";
     }
@@ -97,6 +103,7 @@ export async function updateItemQuantity(
     }
 
     updateTag(TAGS.cart);
+    after(trackStorefrontCart);
   } catch (e) {
     console.error(e);
     return "Error updating item quantity";
@@ -190,6 +197,7 @@ export async function applyDiscountCode(rawCode: string) {
   try {
     const applied = await applyCartDiscount([code]);
     updateTag(TAGS.cart);
+    after(trackStorefrontCart);
     return { applied, saved: true, code };
   } catch {
     return { applied: false, saved: true, code };

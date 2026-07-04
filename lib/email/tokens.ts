@@ -36,3 +36,28 @@ export function unsubscribeUrl(email: string) {
   const encoded = Buffer.from(normalized).toString("base64url");
   return `${CRM.baseUrl}/api/unsubscribe?e=${encoded}&t=${signEmailToken("unsub", normalized)}`;
 }
+
+// Token de identidad (?pj= en enlaces de emails / cookie pj_contact): quién
+// navega la tienda, para la recuperación de carritos pre-checkout.
+export function identityToken(email: string) {
+  const normalized = email.trim().toLowerCase();
+  const encoded = Buffer.from(normalized).toString("base64url");
+  return `${encoded}.${signEmailToken("identity", normalized)}`;
+}
+
+// Token (de cookie o URL) → email verificado, o null si falta/firma inválida.
+export function verifyIdentityToken(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  const [encoded, signature] = raw.split(".");
+  if (!encoded || !signature) return null;
+  let email: string;
+  try {
+    email = Buffer.from(encoded, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+  if (!email.includes("@") || email.length > 254) return null;
+  return verifyEmailToken("identity", email, signature) ? email : null;
+}

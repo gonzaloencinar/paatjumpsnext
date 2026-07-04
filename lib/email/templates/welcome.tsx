@@ -2,6 +2,8 @@
 // compartido; sin promo, da la bienvenida a secas. JSX con estilos inline:
 // Resend lo renderiza en servidor (prop `react`).
 
+import { IDENTITY_PARAM } from "@/lib/crm/identity";
+
 type WelcomeEmailProps = {
   firstName: string | null;
   code: string | null;
@@ -9,6 +11,9 @@ type WelcomeEmailProps = {
   expiresAt: string | null;
   baseUrl: string;
   unsubscribeUrl: string;
+  // Token de lib/email/tokens.ts identityToken(): el botón identifica el
+  // navegador al aterrizar (recuperación de carritos pre-checkout)
+  identity: string | null;
 };
 
 const orange = "#ea580c";
@@ -27,9 +32,13 @@ export function WelcomeEmail({
   expiresAt,
   baseUrl,
   unsubscribeUrl,
+  identity,
 }: WelcomeEmailProps) {
-  const shopUrl = code
-    ? `${baseUrl}/?code=${encodeURIComponent(code)}`
+  const shopParams = new URLSearchParams();
+  if (code) shopParams.set("code", code);
+  if (identity) shopParams.set(IDENTITY_PARAM, identity);
+  const shopUrl = shopParams.size
+    ? `${baseUrl}/?${shopParams.toString()}`
     : baseUrl;
   const expiry = expiresAt ? formatExpiry(expiresAt) : null;
   const pct = percentage ?? 20;

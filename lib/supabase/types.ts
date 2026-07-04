@@ -336,7 +336,7 @@ export type Database = {
           created_at?: string;
           currency?: string | null;
           email?: string | null;
-          id: number;
+          id?: number;
           last_event_at?: string | null;
           line_items?: Json | null;
           origin?: string;

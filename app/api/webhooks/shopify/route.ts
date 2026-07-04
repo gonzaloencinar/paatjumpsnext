@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { effectiveSteps } from "@/lib/crm/automation-engine";
+import { enrollCheckoutInCartRecovery } from "@/lib/crm/automation-engine";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Webhooks de Shopify (plan §7.2 y §8): orders/create + checkouts/create|update.
@@ -85,6 +85,7 @@ type CheckoutPayload = {
   currency?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  completed_at?: string | null;
   abandoned_checkout_url?: string | null;
   buyer_accepts_marketing?: boolean | null;
   customer?: {
@@ -109,6 +110,60 @@ async function findContactByEmail(supabase: Supabase, email: string) {
     .eq("email", email)
     .maybeSingle();
   return data;
+}
+
+// Cierra un checkout que acabó en pedido: si ya había salido algún email de
+// recuperación (enrollment con step ≥ 1) cuenta como 'recovered' — la métrica
+// de "el CRM trajo esta venta de vuelta" — y deja evento en el timeline.
+// Idempotente: reintentos y orders/updated tardíos no duplican nada.
+async function markCheckoutConverted(
+  supabase: Supabase,
+  checkoutId: number,
+  order: OrderPayload,
+  contactId: string | null,
+) {
+  const { data: emailed } = await supabase
+    .from("automation_enrollments")
+    .select("id")
+    .eq("checkout_id", checkoutId)
+    .gte("step", 1)
+    .limit(1)
+    .maybeSingle();
+  const recovered = Boolean(emailed);
+
+  await supabase
+    .from("checkouts")
+    .update({
+      status: recovered ? "recovered" : "converted",
+      last_event_at: new Date().toISOString(),
+    })
+    .eq("id", checkoutId);
+  await supabase
+    .from("automation_enrollments")
+    .update({ status: "canceled", next_run_at: null })
+    .eq("checkout_id", checkoutId)
+    .eq("status", "active");
+
+  if (recovered && contactId) {
+    const { data: dup } = await supabase
+      .from("events")
+      .select("id")
+      .eq("contact_id", contactId)
+      .eq("type", "checkout_recovered")
+      .eq("payload->>checkout_id", String(checkoutId))
+      .maybeSingle();
+    if (!dup) {
+      await supabase.from("events").insert({
+        contact_id: contactId,
+        type: "checkout_recovered",
+        payload: {
+          checkout_id: checkoutId,
+          order_id: order.id,
+          total: order.total_price,
+        },
+      });
+    }
+  }
 }
 
 // ───────────────────────── orders/create ─────────────────────────
@@ -249,15 +304,12 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
 
   // Conversión del checkout → no recuperar lo ya comprado (§7.2)
   if (order.checkout_id) {
-    await supabase
-      .from("checkouts")
-      .update({ status: "converted", last_event_at: new Date().toISOString() })
-      .eq("id", order.checkout_id);
-    await supabase
-      .from("automation_enrollments")
-      .update({ status: "canceled", next_run_at: null })
-      .eq("checkout_id", order.checkout_id)
-      .eq("status", "active");
+    await markCheckoutConverted(
+      supabase,
+      order.checkout_id,
+      order,
+      contact?.id ?? null,
+    );
   } else if (order.checkout_token) {
     const { data: checkout } = await supabase
       .from("checkouts")
@@ -265,18 +317,33 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
       .eq("token", order.checkout_token)
       .maybeSingle();
     if (checkout) {
-      await supabase
-        .from("checkouts")
-        .update({
-          status: "converted",
-          last_event_at: new Date().toISOString(),
-        })
-        .eq("id", checkout.id);
-      await supabase
-        .from("automation_enrollments")
-        .update({ status: "canceled", next_run_at: null })
-        .eq("checkout_id", checkout.id)
-        .eq("status", "active");
+      await markCheckoutConverted(
+        supabase,
+        checkout.id,
+        order,
+        contact?.id ?? null,
+      );
+    }
+  }
+
+  // Carrito del storefront (recuperación pre-checkout) que siguiera abierto:
+  // el pedido también lo cierra por cart_token — cuenta como 'recovered' si
+  // su secuencia ya había enviado algún email.
+  if (order.cart_token) {
+    const { data: local } = await supabase
+      .from("checkouts")
+      .select("id")
+      .eq("cart_token", order.cart_token)
+      .eq("origin", "storefront")
+      .eq("status", "abandoned")
+      .maybeSingle();
+    if (local) {
+      await markCheckoutConverted(
+        supabase,
+        local.id,
+        order,
+        contact?.id ?? null,
+      );
     }
   }
 
@@ -374,46 +441,87 @@ async function handleCheckout(supabase: Supabase, checkout: CheckoutPayload) {
     last_event_at: checkout.updated_at ?? new Date().toISOString(),
   });
 
+  // ¿Este carrito venía trackeado del storefront (recuperación pre-checkout,
+  // lib/crm/local-cart.ts)? El checkout real toma el relevo: si es el mismo
+  // contacto, su inscripción MIGRA al checkout real (la secuencia continúa
+  // donde estaba, sin duplicar emails); si el checkout es de otro contacto,
+  // se cancela. Sin contacto aún (email sin escribir), el carrito local sigue
+  // siendo la mejor pista y no se toca.
+  if (checkout.cart_token) {
+    const { data: local } = await supabase
+      .from("checkouts")
+      .select("id, contact_id")
+      .eq("cart_token", checkout.cart_token)
+      .eq("origin", "storefront")
+      .maybeSingle();
+    if (local && contact) {
+      if (local.contact_id === contact.id) {
+        const { error: migrateError } = await supabase
+          .from("automation_enrollments")
+          .update({ checkout_id: checkout.id })
+          .eq("checkout_id", local.id)
+          .eq("status", "active");
+        // Único caso de conflicto: el checkout real ya tiene inscripción
+        // propia (única por automatización+contacto+checkout) → la local sobra
+        if (migrateError) {
+          await supabase
+            .from("automation_enrollments")
+            .update({ status: "canceled", next_run_at: null })
+            .eq("checkout_id", local.id)
+            .eq("status", "active");
+        }
+      } else {
+        await supabase
+          .from("automation_enrollments")
+          .update({ status: "canceled", next_run_at: null })
+          .eq("checkout_id", local.id)
+          .eq("status", "active");
+      }
+      await supabase
+        .from("checkouts")
+        .update({
+          status: "reached_checkout",
+          last_event_at: new Date().toISOString(),
+        })
+        .eq("id", local.id)
+        .eq("status", "abandoned");
+    }
+  }
+
+  // Checkout ya completado (update tardío o pedido sin checkout_id enlazado):
+  // marcar converted sin esperar a orders/create — sin pisar un 'recovered'
+  // que este ya haya puesto — y cortar la secuencia.
+  if (checkout.completed_at) {
+    await supabase
+      .from("checkouts")
+      .update({ status: "converted", last_event_at: new Date().toISOString() })
+      .eq("id", checkout.id)
+      .eq("status", "abandoned");
+    await supabase
+      .from("automation_enrollments")
+      .update({ status: "canceled", next_run_at: null })
+      .eq("checkout_id", checkout.id)
+      .eq("status", "active");
+    return;
+  }
+
+  // Carrito vaciado a propósito → nada que recuperar: cancela la secuencia si
+  // ya estaba en marcha y no inscribas (un "tu carrito te espera" vacío)
+  if (lineItems.length === 0) {
+    await supabase
+      .from("automation_enrollments")
+      .update({ status: "canceled", next_run_at: null })
+      .eq("checkout_id", checkout.id)
+      .eq("status", "active");
+    return;
+  }
+
   // Recuperación de carrito (§7.2): solo contactos suscritos (la creación de
   // arriba ya cubre buyer_accepts_marketing; el resto, sin email de cortesía
-  // por ahora — decisión conservadora §11)
+  // por ahora — decisión conservadora §11). Inscripción + reinicio del reloj
+  // en cada update: enrollCheckoutInCartRecovery.
   if (!contact || contact.status !== "subscribed") return;
-
-  const { data: automation } = await supabase
-    .from("automations")
-    .select("id, enabled, automation_steps(*)")
-    .eq("key", "cart_recovery")
-    .maybeSingle();
-  if (!automation?.enabled) return;
-  const [first] = effectiveSteps(automation.automation_steps ?? []);
-  if (!first) return;
-
-  const nextRunAt = new Date(
-    Date.now() + first.delay_minutes * 60_000,
-  ).toISOString();
-
-  // Nueva inscripción (ignora si ya existe para este checkout)…
-  await supabase.from("automation_enrollments").upsert(
-    {
-      automation_id: automation.id,
-      contact_id: contact.id,
-      checkout_id: checkout.id,
-      step: 0,
-      status: "active",
-      next_run_at: nextRunAt,
-    },
-    { ignoreDuplicates: true },
-  );
-
-  // …y si sigue en el paso 0 sin enviar, cada update reinicia el reloj
-  // (el cliente sigue activo en el checkout — aún no está "abandonado")
-  await supabase
-    .from("automation_enrollments")
-    .update({ next_run_at: nextRunAt })
-    .eq("automation_id", automation.id)
-    .eq("checkout_id", checkout.id)
-    .eq("status", "active")
-    .eq("step", 0);
+  await enrollCheckoutInCartRecovery(supabase, contact.id, checkout.id);
 }
 
 export async function POST(request: Request) {

@@ -1,11 +1,9 @@
-import {
-  materializeCampaignAudience,
-  parseFacets,
-} from "@/lib/crm/segments";
+import { materializeCampaignAudience, parseFacets } from "@/lib/crm/segments";
+import { IDENTITY_PARAM } from "@/lib/crm/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
-import { unsubscribeUrl } from "@/lib/email/tokens";
+import { identityToken, unsubscribeUrl } from "@/lib/email/tokens";
 import { baseUrl } from "@/lib/utils";
 
 // Motor de envío de campañas (plan §16.3). Lo dispara el cron cada minuto:
@@ -39,7 +37,11 @@ export function mergeName(text: string, firstName: string | null) {
 // (además de la atribución por ventana de clic del webhook).
 const STORE_HOSTS = /(^|\.)paatjumps\.com$/i;
 
-export function tagStoreLinks(html: string, campaignName: string) {
+export function tagStoreLinks(
+  html: string,
+  campaignName: string,
+  identityEmail?: string | null,
+) {
   const campaign = campaignName
     .toLowerCase()
     .normalize("NFD")
@@ -47,15 +49,21 @@ export function tagStoreLinks(html: string, campaignName: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-+|-+$)/g, "")
     .slice(0, 60);
+  const identity = identityEmail ? identityToken(identityEmail) : null;
   return html.replace(/href="([^"]+)"/gi, (match, href: string) => {
     try {
       const url = new URL(href);
       const isStore =
         STORE_HOSTS.test(url.hostname) || `https://${url.host}` === baseUrl;
-      if (!isStore || url.searchParams.has("utm_source")) return match;
-      url.searchParams.set("utm_source", "crm");
-      url.searchParams.set("utm_medium", "email");
-      if (campaign) url.searchParams.set("utm_campaign", campaign);
+      if (!isStore) return match;
+      if (!url.searchParams.has("utm_source")) {
+        url.searchParams.set("utm_source", "crm");
+        url.searchParams.set("utm_medium", "email");
+        if (campaign) url.searchParams.set("utm_campaign", campaign);
+      }
+      // ?pj= → cookie de identidad al aterrizar (proxy.ts): habilita la
+      // recuperación de carritos que no llegan al checkout
+      if (identity) url.searchParams.set(IDENTITY_PARAM, identity);
       return `href="${url.toString()}"`;
     } catch {
       return match; // href relativo o malformado: se deja tal cual
@@ -140,6 +148,7 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
             bodyHtml: tagStoreLinks(
               mergeName(campaign.body_html ?? "", recipient.first_name),
               campaign.name,
+              recipient.email,
             ),
             preheader: campaign.preheader,
             unsubscribeUrl: unsubscribeUrl(recipient.email),

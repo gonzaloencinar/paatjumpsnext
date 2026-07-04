@@ -1,10 +1,12 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { enrollContactInSignupAutomations } from "@/lib/crm/automation-engine";
 import { CRM } from "@/lib/crm/config";
+import { IDENTITY_COOKIE, IDENTITY_MAX_AGE } from "@/lib/crm/identity";
 import { getActiveGeneralPromotion } from "@/lib/crm/promotions";
 import { sendCrmEmail } from "@/lib/email/send";
 import { WelcomeEmail } from "@/lib/email/templates/welcome";
-import { unsubscribeUrl } from "@/lib/email/tokens";
+import { identityToken, unsubscribeUrl } from "@/lib/email/tokens";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -164,6 +166,7 @@ export async function POST(request: Request) {
         expiresAt: promo?.ends_at ?? null,
         baseUrl: CRM.baseUrl,
         unsubscribeUrl: unsubscribeUrl(email),
+        identity: identityToken(email),
       }),
     });
   } catch (error) {
@@ -182,6 +185,16 @@ export async function POST(request: Request) {
       console.error("subscribe: fallo inscribiendo en secuencias", error);
     }
   }
+
+  // Identidad para la recuperación de carritos pre-checkout: quien se
+  // suscribe queda identificado en este navegador (lib/crm/identity.ts).
+  (await cookies()).set(IDENTITY_COOKIE, identityToken(email), {
+    maxAge: IDENTITY_MAX_AGE,
+    path: "/",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
 
   return NextResponse.json({ ok: true, resent: alreadySubscribed });
 }

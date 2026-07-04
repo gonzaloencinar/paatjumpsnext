@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import {
+  IDENTITY_COOKIE,
+  IDENTITY_MAX_AGE,
+  IDENTITY_PARAM,
+} from "@/lib/crm/identity";
+import {
   COUNTRY_COOKIE,
   LOCALE_COOKIE,
   isLocale,
@@ -39,6 +44,25 @@ export async function proxy(request: NextRequest) {
   // árbol de locales — pasa sin rewrite ni redirección de idioma.
   if (pathname === "/l" || pathname.startsWith("/l/")) {
     return NextResponse.next();
+  }
+
+  // Identidad del CRM: los enlaces de los emails llegan con ?pj=<token
+  // firmado>. A cookie httpOnly y URL limpia (el token no debe quedarse en
+  // barra/historial/compartidos); la firma se verifica al USARLA — aquí no hay
+  // node:crypto. El redirect re-entra al proxy y sigue el flujo de locale.
+  const identity = request.nextUrl.searchParams.get(IDENTITY_PARAM);
+  if (identity) {
+    const url = request.nextUrl.clone();
+    url.searchParams.delete(IDENTITY_PARAM);
+    const response = NextResponse.redirect(url, 307);
+    response.cookies.set(IDENTITY_COOKIE, identity, {
+      maxAge: IDENTITY_MAX_AGE,
+      path: "/",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    return response;
   }
 
   const country =

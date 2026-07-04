@@ -84,14 +84,15 @@ export const EMAIL_SEND_STATUS: Record<
 };
 
 // Triggers de automatización (§16.4). Los marcados Fase 2 existen en el
-// esquema pero aún no se procesan.
+// esquema pero aún no se procesan (checkout_abandoned ya es operativo: lo
+// inscriben los webhooks de checkouts desde la Fase 2).
 export const AUTOMATION_TRIGGER: Record<
   string,
   { label: string; phase2?: boolean }
 > = {
   signup: { label: "Al suscribirse" },
   manual: { label: "Manual" },
-  checkout_abandoned: { label: "Checkout abandonado", phase2: true },
+  checkout_abandoned: { label: "Checkout abandonado" },
   order_placed: { label: "Tras comprar", phase2: true },
   winback: { label: "Winback", phase2: true },
 };
