@@ -116,6 +116,27 @@ export async function proxy(request: NextRequest) {
     if (country && request.cookies.get(COUNTRY_COOKIE)?.value !== country) {
       response.cookies.set(COUNTRY_COOKIE, country, cookieOptions);
     }
+    // Enlaces con código (?code=MARIA10: afiliados y emails del CRM): la cookie
+    // pj_discount queda fijada ya aquí para que el PRIMER render del layout
+    // sepa que el visitante trae código — si es de afiliado no se le enseña la
+    // promo general (pisaría su descuento) sino la barra de envío gratis.
+    // applyDiscountCode (DiscountCodeHandler) la re-fija luego con la caducidad
+    // real de la promo; el param se queda en la URL porque él lo consume.
+    const code = request.nextUrl.searchParams
+      .get("code")
+      ?.trim()
+      .toUpperCase()
+      .slice(0, 40);
+    if (
+      code &&
+      /^[A-Z0-9-]{4,}$/.test(code) &&
+      request.cookies.get("pj_discount")?.value !== code
+    ) {
+      response.cookies.set("pj_discount", code, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 90,
+      });
+    }
   }
 
   return response;

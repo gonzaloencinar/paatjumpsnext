@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
   createPromotion,
@@ -238,6 +238,32 @@ export function PromotionDialog({ promotion }: { promotion?: Promotion }) {
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Enlace de afiliado listo para compartir (paatjumps.com/?code=MARIA10). Al
+// entrar por él, el código se aplica solo al carrito y la web NO enseña la
+// promo general anunciada (no pisamos el descuento del afiliado); en su lugar
+// sale la barra de envío gratis. Ver proxy.ts y el layout de la tienda.
+export function CopyAffiliateLinkButton({ url }: { url: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="w-fit max-w-full font-mono text-muted-foreground"
+      title="Copiar enlace de afiliado"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          toast.success("Enlace de afiliado copiado");
+        } catch {
+          toast.error("No se pudo copiar el enlace");
+        }
+      }}
+    >
+      <CopyIcon data-icon="inline-start" />
+      <span className="truncate">{url.replace(/^https?:\/\//, "")}</span>
+    </Button>
   );
 }
 

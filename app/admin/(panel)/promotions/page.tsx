@@ -1,6 +1,7 @@
 import { TicketPercentIcon } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import {
+  CopyAffiliateLinkButton,
   DeletePromotionButton,
   PromotionActiveSwitch,
   PromotionAnnounceSwitch,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { formatDate, formatMoney } from "@/lib/crm/format";
 import { listPromotions } from "@/lib/crm/queries";
+import { baseUrl } from "@/lib/utils";
 
 export const metadata = { title: "Promociones" };
 
@@ -101,6 +103,11 @@ export default async function PromotionsPage() {
                               <Badge variant="destructive">Sin sync</Badge>
                             ) : null}
                           </span>
+                          {promotion.type === "affiliate" ? (
+                            <CopyAffiliateLinkButton
+                              url={`${baseUrl}/?code=${promotion.code}`}
+                            />
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell>
