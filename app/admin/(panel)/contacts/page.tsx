@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/crm/format";
+import { formatDate, formatMoney } from "@/lib/crm/format";
 import { listContacts } from "@/lib/crm/queries";
 
 export const metadata = { title: "Contactos" };
@@ -156,6 +156,11 @@ export default async function ContactsPage({
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground md:table-cell">
                         {contact.source ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
+                        {contact.orders_count > 0
+                          ? `${contact.orders_count} ped. · ${formatMoney(contact.total_spent)}`
+                          : "—"}
                       </TableCell>
                       <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
                         {formatDate(contact.created_at)}

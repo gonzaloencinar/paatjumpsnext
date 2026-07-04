@@ -37,6 +37,56 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+type Touch = {
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  landing: string | null;
+  referrer: string | null;
+};
+
+// Un toque de atribución (primer contacto / última compra) en filas compactas.
+function TouchRows({ title, touch }: { title: string; touch: Touch }) {
+  const empty =
+    !touch.source && !touch.campaign && !touch.landing && !touch.referrer;
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-semibold tracking-wide uppercase">{title}</p>
+      {empty ? (
+        <p className="text-sm text-muted-foreground">Directo / sin datos</p>
+      ) : (
+        <dl className="flex flex-col gap-2">
+          {touch.source ? (
+            <InfoRow label="Fuente">
+              {touch.source}
+              {touch.medium ? ` / ${touch.medium}` : ""}
+            </InfoRow>
+          ) : null}
+          {touch.campaign ? (
+            <InfoRow label="Campaña">
+              <span className="break-all">{touch.campaign}</span>
+            </InfoRow>
+          ) : null}
+          {touch.landing ? (
+            <InfoRow label="Landing">
+              <span className="font-mono text-xs break-all">
+                {touch.landing}
+              </span>
+            </InfoRow>
+          ) : null}
+          {touch.referrer ? (
+            <InfoRow label="Referrer">
+              <span className="font-mono text-xs break-all">
+                {touch.referrer}
+              </span>
+            </InfoRow>
+          ) : null}
+        </dl>
+      )}
+    </div>
+  );
+}
+
 export default async function ContactDetailPage({
   params,
 }: {
@@ -46,6 +96,35 @@ export default async function ContactDetailPage({
   const detail = await getContactDetail(id);
   if (!detail) notFound();
   const { contact, events, codes, orders, sends, phone } = detail;
+
+  // Atribución a nivel de contacto, derivada de sus pedidos (note_attributes
+  // → orders, ver memoria de UTM): primer toque = first_utm_* de su pedido
+  // más antiguo; último toque = utm_* del más reciente. orders llega desc.
+  const oldestOrder = orders[orders.length - 1];
+  const newestOrder = orders[0];
+  const firstTouch = oldestOrder
+    ? {
+        source: oldestOrder.first_utm_source ?? oldestOrder.utm_source,
+        medium: oldestOrder.first_utm_medium ?? oldestOrder.utm_medium,
+        campaign: oldestOrder.first_utm_campaign ?? oldestOrder.utm_campaign,
+        landing: oldestOrder.first_landing_page ?? oldestOrder.landing_page,
+        referrer: oldestOrder.first_referrer ?? oldestOrder.referrer,
+      }
+    : null;
+  const lastTouch = newestOrder
+    ? {
+        source: newestOrder.utm_source,
+        medium: newestOrder.utm_medium,
+        campaign: newestOrder.utm_campaign,
+        landing: newestOrder.landing_page,
+        referrer: newestOrder.referrer,
+      }
+    : null;
+  const clickId = newestOrder?.gclid
+    ? "Google Ads (gclid)"
+    : newestOrder?.fbclid
+      ? "Meta Ads (fbclid)"
+      : null;
 
   return (
     <div className="flex flex-col">
@@ -208,6 +287,32 @@ export default async function ContactDetailPage({
                     )}
                   </InfoRow>
                 </dl>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Marketing</CardTitle>
+                <CardDescription>Atribución UTM de sus pedidos</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!firstTouch || !lastTouch ? (
+                  <p className="text-sm text-muted-foreground">
+                    Sin pedidos: la atribución llegará con su primera compra.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <TouchRows title="Primer contacto" touch={firstTouch} />
+                    {orders.length > 1 ? (
+                      <TouchRows title="Última compra" touch={lastTouch} />
+                    ) : null}
+                    {clickId ? (
+                      <dl>
+                        <InfoRow label="Click ID">{clickId}</InfoRow>
+                      </dl>
+                    ) : null}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

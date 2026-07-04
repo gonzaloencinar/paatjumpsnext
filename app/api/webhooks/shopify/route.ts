@@ -230,7 +230,8 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
   const lineItems = (order.line_items ?? []).slice(0, 50).map((item) => {
     const allocations = item.discount_allocations ?? [];
     const upsell = allocations.some(
-      (a) => applications[a.discount_application_index ?? -1]?.type === "manual",
+      (a) =>
+        applications[a.discount_application_index ?? -1]?.type === "manual",
     );
     if (upsell) {
       const discounted = allocations.reduce(
@@ -322,23 +323,20 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
       })
       .eq("id", contact.id);
 
-    const { data: dup } = await supabase
-      .from("events")
-      .select("id")
-      .eq("contact_id", contact.id)
-      .eq("type", "order_placed")
-      .eq("payload->>order_id", String(order.id))
-      .maybeSingle();
-    if (!dup) {
-      await supabase.from("events").insert({
-        contact_id: contact.id,
-        type: "order_placed",
-        payload: {
-          order_id: order.id,
-          total: order.total_price,
-          discount_code: discountCode,
-        },
-      });
+    // Dedup por el índice único events_order_placed_unique: orders/updated
+    // re-entra por aquí en cada cambio del pedido y el 23505 descarta el
+    // evento repetido sin carrera posible (un chequeo previo no lo era).
+    const { error: eventError } = await supabase.from("events").insert({
+      contact_id: contact.id,
+      type: "order_placed",
+      payload: {
+        order_id: order.id,
+        total: order.total_price,
+        discount_code: discountCode,
+      },
+    });
+    if (eventError && eventError.code !== "23505") {
+      console.error("[webhooks/shopify] evento order_placed:", eventError);
     }
   }
 
