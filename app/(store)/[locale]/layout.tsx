@@ -5,12 +5,14 @@ import { LocaleProvider } from "components/i18n/locale-context";
 import { Navbar } from "components/layout/navbar";
 import { AnnouncementBar } from "components/marketing/announcement-bar";
 import { DiscountCodeHandler } from "components/marketing/discount-code-handler";
+import { FreeShippingBar } from "components/marketing/free-shipping-bar";
 import { WelcomeToast } from "components/welcome-toast";
 import { getAnnouncedPromotion, getPromotionByCode } from "lib/crm/promotions";
 import { geist } from "lib/fonts";
 import { defaultLocale, isLocale, locales } from "lib/i18n/config";
 import { browsePath } from "lib/i18n/routes";
 import { getCart } from "lib/shopify";
+import { IDENTITY_COOKIE } from "lib/crm/identity";
 import { COUNTRY_COOKIE } from "lib/i18n/config";
 import { shippingZone } from "lib/shipping";
 import { baseUrl, cn } from "lib/utils";
@@ -75,17 +77,22 @@ export default async function StoreLayout({
   const region = headerList.get("x-vercel-ip-country-region") ?? "";
   const zone = shippingZone(country, region);
 
-  // Barra sticky de captación: la ocultamos solo si el visitante ya tiene el
-  // código de la promo anunciada AHORA (no le pedimos lo que ya tiene), o si
-  // tiene un código de afiliado (no lo pisamos con la promo general). Si se
-  // anuncia otra promo con otro código, la barra vuelve a salir aunque su cookie
-  // siga viva. La cookie pj_discount la fija applyDiscountCode.
+  // Barra sticky de captación: la ocultamos si el visitante ya tiene el
+  // código de la promo anunciada AHORA (no le pedimos lo que ya tiene), si
+  // tiene un código de afiliado (no lo pisamos con la promo general), o si ya
+  // nos dio su email en este navegador (cookie pj_contact: la fija el alta de
+  // /api/subscribe y también llegar desde un email del CRM con ?pj=). Cuando
+  // no procede, en su lugar va la barra de envío gratis (FreeShippingBar).
+  // La cookie pj_discount la fija el proxy al aterrizar con ?code=… (así este
+  // primer render ya la ve) y applyDiscountCode la re-fija con la caducidad
+  // real de la promo.
   const pendingCode = cookieStore.get("pj_discount")?.value ?? null;
   const heldPromo = pendingCode ? await getPromotionByCode(pendingCode) : null;
   const holdsAnnounced = Boolean(promo) && pendingCode === promo?.code;
   const holdsAffiliate = heldPromo?.type === "affiliate";
+  const identified = Boolean(cookieStore.get(IDENTITY_COOKIE)?.value);
   const showAnnouncement =
-    Boolean(promo) && !holdsAnnounced && !holdsAffiliate;
+    Boolean(promo) && !holdsAnnounced && !holdsAffiliate && !identified;
 
   const organizationJsonLd = {
     "@context": "https://schema.org",
@@ -136,7 +143,9 @@ export default async function StoreLayout({
                   percentage={promo.percentage}
                   code={promo.code}
                 />
-              ) : null}
+              ) : (
+                <FreeShippingBar />
+              )}
               <Navbar locale={locale} />
               <main>
                 {children}

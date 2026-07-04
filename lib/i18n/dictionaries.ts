@@ -223,6 +223,10 @@ const es = {
     genericError: "No se pudo completar el alta. Inténtalo de nuevo.",
     closeBar: "Cerrar barra de oferta",
   },
+  shippingBar: {
+    ariaLabel: "Envío gratis",
+    fromPrefix: "Envío gratis a partir de",
+  },
   discount: {
     appliedTitle: "Código {code} aplicado",
     appliedDescription: "Verás el descuento en tu carrito y en el checkout.",
@@ -444,6 +448,10 @@ const en = {
     rateLimited: "Too many attempts, try again in a bit.",
     genericError: "We couldn't complete the signup. Please try again.",
     closeBar: "Close offer bar",
+  },
+  shippingBar: {
+    ariaLabel: "Free shipping",
+    fromPrefix: "Free shipping on orders over",
   },
   discount: {
     appliedTitle: "Code {code} applied",

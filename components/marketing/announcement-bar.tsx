@@ -1,18 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { XIcon } from "lucide-react";
 import { useCart } from "components/cart/cart-context";
 import { useDictionary } from "components/i18n/locale-context";
+import { FreeShippingBar } from "components/marketing/free-shipping-bar";
 import { fill } from "lib/i18n/dictionaries";
 
 // Barra sticky de captación del lanzamiento (plan §7.1).
 // Estética de marca: naranja-600 pleno con texto blanco, sin grises.
-// Aparece SIEMPRE (sin cookie de "ya rellenado"): un email repetido no la
-// oculta, sino que reenvía el mismo código por si acaso fue a spam. La X solo
-// la cierra durante la sesión (vuelve a salir al recargar).
+// Tras pedir el código, el mensaje de éxito se queda unos segundos y la barra
+// se retira sola; en cargas posteriores ya ni sale (el alta deja la cookie
+// pj_contact y el layout la lee). Siempre que esta barra no proceda —éxito,
+// X durante la sesión o código ya en el carrito— la releva FreeShippingBar,
+// para que el umbral de envío gratis se vea en toda la web.
 
 type Status = "idle" | "sending" | "success" | "error";
+
+// Tiempo que el mensaje de éxito queda visible antes del relevo.
+const SUCCESS_VISIBLE_MS = 5000;
 
 export function AnnouncementBar({
   name,
@@ -37,7 +43,13 @@ export function AnnouncementBar({
     cart?.discountCodes?.some((d) => d.applicable && d.code === code),
   );
 
-  if (!visible || hasAnnouncedCode) return null;
+  useEffect(() => {
+    if (status !== "success") return;
+    const timer = setTimeout(() => setVisible(false), SUCCESS_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  if (!visible || hasAnnouncedCode) return <FreeShippingBar />;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
