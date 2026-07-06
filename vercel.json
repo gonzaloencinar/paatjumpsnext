@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/packlink-sync",
-      "schedule": "0 * * * *"
+      "schedule": "*/10 * * * *"
     }
   ]
 }

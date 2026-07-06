@@ -91,7 +91,9 @@ const productDescEn = (p, titleEn) =>
 const withJump = (titleEn) =>
   /jump\s+ropes?/i.test(titleEn)
     ? titleEn
-    : titleEn.replace(/\bRopes\b/, "Jump Ropes").replace(/\bRope\b/, "Jump Rope");
+    : titleEn
+        .replace(/\bRopes\b/, "Jump Ropes")
+        .replace(/\bRope\b/, "Jump Rope");
 
 // ── GraphQL vía shopify CLI (mismo mecanismo que tools/shopify-create) ────────
 
@@ -196,7 +198,11 @@ async function registerEn(resourceId, entries, label) {
     for (const t of translations) log(`   [dry] EN ${t.key} → «${t.value}»`);
     return { current };
   }
-  const d = await gql(M_TRANSLATE, { id: resourceId, translations }, { mutation: true });
+  const d = await gql(
+    M_TRANSLATE,
+    { id: resourceId, translations },
+    { mutation: true },
+  );
   checkUE(d.translationsRegister, `translationsRegister ${label}`);
   for (const t of translations) log(`   ✓ EN ${t.key} → «${t.value}»`);
   return { current };

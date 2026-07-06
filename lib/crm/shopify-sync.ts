@@ -120,6 +120,7 @@ type GqlOrder = {
   customAttributes: { key: string; value: string | null }[];
   discountCodes: string[];
   customer: { legacyResourceId: string; email: string | null } | null;
+  shippingLine: { title: string } | null;
   shippingAddress: {
     city: string | null;
     province: string | null;
@@ -206,6 +207,9 @@ const ORDERS_QUERY = /* GraphQL */ `
         customer {
           legacyResourceId
           email
+        }
+        shippingLine {
+          title
         }
         shippingAddress {
           city
@@ -346,6 +350,7 @@ function mapOrder(order: GqlOrder, contactId: string | null) {
     shipping_zip: order.shippingAddress?.zip ?? null,
     shipping_country: order.shippingAddress?.country ?? null,
     shipping_country_code: order.shippingAddress?.countryCodeV2 ?? null,
+    shipping_line_title: order.shippingLine?.title ?? null,
     line_items: order.lineItems.nodes.slice(0, 50).map((item) => ({
       title: item.title,
       variant: item.variantTitle,

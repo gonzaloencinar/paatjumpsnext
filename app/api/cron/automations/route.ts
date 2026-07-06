@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { processAutomations } from "@/lib/crm/automation-engine";
 import { processCampaigns } from "@/lib/crm/campaign-engine";
+import { processDniRequests } from "@/lib/crm/dni-requests";
 
 // Runner único del CRM (plan §10 y §16.1): Vercel Cron lo golpea cada minuto
 // (vercel.json) con `Authorization: Bearer CRON_SECRET`. Procesa campañas
-// (§16.3) y secuencias (§16.4) con un presupuesto de emails compartido; la
-// Fase 2 enchufará aquí los triggers de checkout/pedidos.
+// (§16.3), secuencias (§16.4) con un presupuesto de emails compartido y las
+// peticiones de DNI de pedidos con aduana (lib/crm/dni-requests.ts).
 
 export const maxDuration = 60; // el presupuesto del tick está dimensionado para caber
 
@@ -27,7 +28,9 @@ export async function GET(request: Request) {
     const automations = await processAutomations(
       Math.max(0, TICK_EMAIL_BUDGET - used),
     );
-    return NextResponse.json({ ok: true, campaigns, automations });
+    // Volumen mínimo (pedidos con aduana): fuera del presupuesto del tick
+    const dniRequests = await processDniRequests();
+    return NextResponse.json({ ok: true, campaigns, automations, dniRequests });
   } catch (error) {
     console.error("[cron/automations]", error);
     return NextResponse.json({ ok: false }, { status: 500 });

@@ -1,4 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  isUrgentShipping,
+  madridToday,
+  packlinkPhase,
+  type PacklinkPhase,
+} from "./packlink";
 
 // Consultas de la parte "tienda" del panel (/admin/orders, /admin/customers,
 // /admin/analytics). Los datos los alimentan el webhook orders/create y el
@@ -20,39 +26,312 @@ export function shopifyAdminUrl(path: string) {
 // El interpolado de .or() usa comas y paréntesis como sintaxis
 const sanitizeSearch = (q: string) => q.replace(/[,()%]/g, " ").trim();
 
-// ───────────────────────────── pedidos ─────────────────────────────
+// ───────────────────────────── pedidos + envíos ─────────────────────────────
 
-export async function listOrders(params: {
+export type OrderShipment = {
+  reference: string;
+  /** "packlink" | "genei" */
+  provider: string;
+  state: string | null;
+  phase: PacklinkPhase;
+  carrier: string | null;
+  service: string | null;
+  service_id: string | null;
+  price_base: number | null;
+  price_total: number | null;
+  cost: number | null;
+  collection_date: string | null;
+  collection_time: string | null;
+  estimated_delivery_date: string | null;
+  home_to_home: boolean | null;
+  tracking: string | null;
+  tracking_url: string | null;
+  label_url: string | null;
+};
+
+// Si un pedido acumulara más de un envío se muestra el más relevante
+const PHASE_RANK: Record<PacklinkPhase, number> = {
+  cancelado: 0,
+  borrador: 1,
+  etiqueta: 2,
+  recogida: 3,
+  enviado: 4,
+  entregado: 5,
+  incidencia: 6,
+};
+
+const SHIPMENT_COLS =
+  "reference, provider, custom_reference, order_id, state, carrier, service, service_id, price_base, price_total, cost, collection_date, collection_time, estimated_delivery_date, home_to_home, tracking, tracking_url, label_url";
+
+type ShipmentRow = {
+  reference: string;
+  provider: string;
+  custom_reference: string | null;
+  order_id: number | null;
+  state: string | null;
+  carrier: string | null;
+  service: string | null;
+  service_id: string | null;
+  price_base: number | null;
+  price_total: number | null;
+  cost: number | null;
+  collection_date: string | null;
+  collection_time: string | null;
+  estimated_delivery_date: string | null;
+  home_to_home: boolean | null;
+  tracking: string | null;
+  tracking_url: string | null;
+  label_url: string | null;
+};
+
+function toShipment(row: ShipmentRow): OrderShipment {
+  return {
+    reference: row.reference,
+    provider: row.provider,
+    state: row.state,
+    phase: packlinkPhase(row.state, row.collection_date),
+    carrier: row.carrier,
+    service: row.service,
+    service_id: row.service_id,
+    price_base: row.price_base,
+    price_total: row.price_total,
+    cost: row.cost,
+    collection_date: row.collection_date,
+    collection_time: row.collection_time,
+    estimated_delivery_date: row.estimated_delivery_date,
+    home_to_home: row.home_to_home,
+    tracking: row.tracking,
+    tracking_url: row.tracking_url,
+    label_url: row.label_url,
+  };
+}
+
+// Envío Packlink por pedido: match por order_id (creados desde el CRM) y por
+// custom_reference = nombre del pedido (respaldo hasta que el sync enlaza).
+async function getOrderShipments(
+  orders: { id: number; name: string | null }[],
+): Promise<Map<number, OrderShipment>> {
+  const best = new Map<number, OrderShipment>();
+  if (orders.length === 0) return best;
+  const supabase = await createClient();
+
+  const ids = orders.map((o) => o.id);
+  const names = orders.map((o) => o.name).filter(Boolean) as string[];
+  const [byId, byName] = await Promise.all([
+    supabase
+      .from("packlink_shipments")
+      .select(SHIPMENT_COLS)
+      .in("order_id", ids),
+    names.length > 0
+      ? supabase
+          .from("packlink_shipments")
+          .select(SHIPMENT_COLS)
+          .in("custom_reference", names)
+      : Promise.resolve({ data: [] as ShipmentRow[] }),
+  ]);
+
+  const nameToId = new Map(
+    orders.filter((o) => o.name).map((o) => [o.name!, o.id]),
+  );
+  const seen = new Set<string>();
+  for (const row of [
+    ...((byId.data ?? []) as ShipmentRow[]),
+    ...((byName.data ?? []) as ShipmentRow[]),
+  ]) {
+    if (seen.has(row.reference)) continue;
+    seen.add(row.reference);
+    const orderId =
+      row.order_id ?? nameToId.get(row.custom_reference ?? "") ?? null;
+    if (orderId == null) continue;
+    const shipment = toShipment(row);
+    const current = best.get(orderId);
+    if (!current || PHASE_RANK[shipment.phase] > PHASE_RANK[current.phase]) {
+      best.set(orderId, shipment);
+    }
+  }
+  return best;
+}
+
+export type OrdersViewParams = {
   q?: string;
   fuente?: string;
+  /** "pendientes" = pagados/por enviar; "enviados" = fulfillment completo */
+  estado?: string;
+  /** fase del envío Packlink o "sin" (pedidos sin envío) */
+  envio?: string;
+  /** fecha pedido desde/hasta (YYYY-MM-DD) */
+  desde?: string;
+  hasta?: string;
+  /** recogida programada: "hoy" | "manana" | YYYY-MM-DD */
+  recogida?: string;
+  /** rango de recogida personalizado (YYYY-MM-DD) */
+  rdesde?: string;
+  rhasta?: string;
+  /** "1" = solo pedidos con envío urgente 24h en el checkout */
+  urgente?: string;
   page?: number;
-}) {
+};
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Máximo de pedidos que se filtran/paginan en memoria (escala actual: cientos)
+const VIEW_FETCH_LIMIT = 1000;
+
+function madridDayOffset(base: string, days: number): string {
+  const date = new Date(`${base}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+// Vista de /admin/orders: pedidos + su envío Packlink + KPIs operativos.
+// Los filtros de envío/recogida/urgente se aplican en memoria sobre el
+// conjunto ya filtrado por SQL (mismo criterio in-memory que analytics).
+export async function getOrdersView(params: OrdersViewParams) {
   const supabase = await createClient();
-  const page = Math.max(1, params.page ?? 1);
-  const from = (page - 1) * ORDERS_PER_PAGE;
 
   let query = supabase
     .from("orders")
     .select(
-      "id, name, email, created_at, total_price, total_refunded, currency, financial_status, fulfillment_status, cancelled_at, test, utm_source, utm_medium, utm_campaign, discount_code, shipping_city, shipping_province, shipping_country_code, line_items",
-      { count: "exact" },
+      "id, name, email, created_at, total_price, total_refunded, currency, financial_status, fulfillment_status, cancelled_at, test, utm_source, utm_medium, utm_campaign, discount_code, shipping_city, shipping_province, shipping_country_code, shipping_line_title, line_items",
     )
     .order("created_at", { ascending: false })
-    .range(from, from + ORDERS_PER_PAGE - 1);
+    .limit(VIEW_FETCH_LIMIT);
 
   if (params.q) {
     const q = sanitizeSearch(params.q);
     if (q) query = query.or(`email.ilike.%${q}%,name.ilike.%${q}%`);
   }
   if (params.fuente) query = query.eq("utm_source", params.fuente);
+  if (params.estado === "pendientes") {
+    query = query
+      .is("cancelled_at", null)
+      .eq("test", false)
+      .neq("financial_status", "refunded")
+      .or("fulfillment_status.is.null,fulfillment_status.neq.fulfilled");
+  } else if (params.estado === "enviados") {
+    query = query.eq("fulfillment_status", "fulfilled");
+  }
+  if (params.desde && DATE_RE.test(params.desde)) {
+    query = query.gte("created_at", `${params.desde}T00:00:00+02:00`);
+  }
+  if (params.hasta && DATE_RE.test(params.hasta)) {
+    query = query.lte("created_at", `${params.hasta}T23:59:59+02:00`);
+  }
 
-  const { data, count, error } = await query;
+  const { data, error } = await query;
   if (error) throw error;
+  let orders = data ?? [];
+
+  const shipments = await getOrderShipments(orders);
+
+  // Filtros en memoria: fase del envío, recogida y urgente 24h
+  const today = madridToday();
+  const tomorrow = madridDayOffset(today, 1);
+  if (params.envio) {
+    orders = orders.filter((order) => {
+      const shipment = shipments.get(order.id);
+      if (params.envio === "sin") return !shipment;
+      return shipment?.phase === params.envio;
+    });
+  }
+  if (params.recogida) {
+    const target =
+      params.recogida === "hoy"
+        ? today
+        : params.recogida === "manana"
+          ? tomorrow
+          : DATE_RE.test(params.recogida)
+            ? params.recogida
+            : null;
+    if (target) {
+      orders = orders.filter(
+        (order) => shipments.get(order.id)?.collection_date === target,
+      );
+    }
+  } else if (params.rdesde || params.rhasta) {
+    const from =
+      params.rdesde && DATE_RE.test(params.rdesde) ? params.rdesde : null;
+    const to =
+      params.rhasta && DATE_RE.test(params.rhasta) ? params.rhasta : null;
+    if (from || to) {
+      orders = orders.filter((order) => {
+        const date = shipments.get(order.id)?.collection_date;
+        return date != null && (!from || date >= from) && (!to || date <= to);
+      });
+    }
+  }
+  if (params.urgente === "1") {
+    orders = orders.filter((order) =>
+      isUrgentShipping(order.shipping_line_title),
+    );
+  }
+
+  // KPIs globales (independientes de los filtros activos)
+  const [pendingRes, shipmentKpiRes] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id, shipping_line_title")
+      .is("cancelled_at", null)
+      .eq("test", false)
+      .neq("financial_status", "refunded")
+      .or("fulfillment_status.is.null,fulfillment_status.neq.fulfilled")
+      .limit(VIEW_FETCH_LIMIT),
+    supabase
+      .from("packlink_shipments")
+      .select("reference, state, collection_date")
+      .not("state", "in", "(CANCELED,CANCELLED)")
+      .limit(VIEW_FETCH_LIMIT),
+  ]);
+  const pendingOrders = pendingRes.data ?? [];
+  const kpiPhases = (shipmentKpiRes.data ?? []).map((s) => ({
+    phase: packlinkPhase(s.state, s.collection_date),
+    collection_date: s.collection_date,
+  }));
+
+  const kpis = {
+    pendientes: pendingOrders.length,
+    urgentes: pendingOrders.filter((o) =>
+      isUrgentShipping(o.shipping_line_title),
+    ).length,
+    recogidaHoy: kpiPhases.filter(
+      (s) => s.phase === "recogida" && s.collection_date === today,
+    ).length,
+    recogidaManana: kpiPhases.filter(
+      (s) => s.phase === "recogida" && s.collection_date === tomorrow,
+    ).length,
+    incidencias: kpiPhases.filter((s) => s.phase === "incidencia").length,
+  };
+
+  // Paginación en memoria sobre el conjunto filtrado
+  const page = Math.max(1, params.page ?? 1);
+  const total = orders.length;
+  const start = (page - 1) * ORDERS_PER_PAGE;
+  const pageOrders = orders.slice(start, start + ORDERS_PER_PAGE);
+
+  // Pedidos "Esperando ID": petición de DNI (aduana/internacional) aún sin
+  // responder (lib/crm/dni-requests.ts) → badge en la columna Envío
+  const awaitingId = new Set<number>();
+  if (pageOrders.length > 0) {
+    const { data: pendingDni } = await supabase
+      .from("order_dni_requests")
+      .select("order_id")
+      .is("submitted_at", null)
+      .in(
+        "order_id",
+        pageOrders.map((o) => o.id),
+      );
+    for (const row of pendingDni ?? []) awaitingId.add(row.order_id);
+  }
+
   return {
-    orders: data ?? [],
-    total: count ?? 0,
+    orders: pageOrders,
+    shipments,
+    awaitingId,
+    total,
     page,
     perPage: ORDERS_PER_PAGE,
+    kpis,
+    today,
+    tomorrow,
   };
 }
 

@@ -1,10 +1,11 @@
 # Auditoría SEO — julio 2026
 
 Auditoría de `www.paatjumps.com` + keyword research (DataForSEO, Google España y Google US)
-+ análisis del competidor directo `elevaterope.com`. Informe visual completo:
-https://claude.ai/code/artifact/b1ece1c5-db24-49d8-b639-b97414eca71e
-· Keywords con volúmenes en [keyword-research-2026-07.xlsx](./keyword-research-2026-07.xlsx)
-(hojas España / Estados Unidos / Long-tail) · CSVs crudos en `~/dataforseo_outputs/`.
+
+- análisis del competidor directo `elevaterope.com`. Informe visual completo:
+  https://claude.ai/code/artifact/b1ece1c5-db24-49d8-b639-b97414eca71e
+  · Keywords con volúmenes en [keyword-research-2026-07.xlsx](./keyword-research-2026-07.xlsx)
+  (hojas España / Estados Unidos / Long-tail) · CSVs crudos en `~/dataforseo_outputs/`.
 
 > Hallazgos extra del long-tail (Google ES): **«comba decathlon» 1.900/mes** y
 > **«double unders» 1.900/mes** — ambos perfectos para el futuro blog (comparativa
@@ -17,12 +18,12 @@ no se puede posicionar ni convertir esa demanda.
 
 ## Estado de partida (2026-07-03)
 
-| Métrica | Paat Jumps | Elevate Rope |
-| --- | --- | --- |
-| Keywords orgánicas (Google US) | 0 | 3.519 (~5.400 visitas/mes) |
-| Keywords orgánicas (Google ES) | 0 | 115 |
-| Autoridad de dominio (backlinks rank) | 0 | 305 |
-| Origen del tráfico orgánico | — | ~90 % blog, no fichas |
+| Métrica                               | Paat Jumps | Elevate Rope               |
+| ------------------------------------- | ---------- | -------------------------- |
+| Keywords orgánicas (Google US)        | 0          | 3.519 (~5.400 visitas/mes) |
+| Keywords orgánicas (Google ES)        | 0          | 115                        |
+| Autoridad de dominio (backlinks rank) | 0          | 305                        |
+| Origen del tráfico orgánico           | —          | ~90 % blog, no fichas      |
 
 Lo que ya estaba bien montado (no tocar): hreflang `es/en/x-default` recíproco y
 self-canonical en todas las plantillas; middleware que **nunca** redirige bots por geo-IP;
@@ -37,69 +38,69 @@ La cabeza del mercado usa **«comba»**; «cuerda de saltar» es la variante neu
 Elevate no usa «comba» en ningún sitio (su /es es traducción automática): ese vocabulario
 está sin dueño especializado.
 
-| Keyword | Vol/mes | Targeting hoy |
-| --- | ---: | --- |
-| comba / combas | 4.400 | Home + `/search` |
-| saltar a la comba | 2.900 (comp. baja) | Futuro blog |
-| ~~comba crossfit~~ | 1.900 | **Futuro** — sin producto |
-| cuerda para saltar | 720 | Sinónimo en copy |
-| ~~comba boxeo~~ | 480 | **Futuro** — sin producto |
-| cuerda de saltar | 480 | Sinónimo en copy |
-| comba de saltar | 260 | Home (title) |
-| beneficios saltar a la comba | 170 (baja) | Futuro blog |
-| ~~comba lastrada~~ | 140 | **Futuro** — gap de producto |
-| comba profesional | 110 | Copy home |
-| comprar comba · comba doble salto · ejercicios con comba | 70 c/u | Catálogo · futuro blog |
-| speed rope · **comba segmentada** · beaded rope | 50 c/u | Colecciones actuales |
-| **comba pvc / combas pvc** · comba de velocidad | 40 c/u | Colección PVC |
-| mejores combas | 20 | Futuro blog comparativa |
-| comba freestyle · comba de cuentas · comba beaded | 10 c/u | Copy segmentadas |
+| Keyword                                                  |            Vol/mes | Targeting hoy                |
+| -------------------------------------------------------- | -----------------: | ---------------------------- |
+| comba / combas                                           |              4.400 | Home + `/search`             |
+| saltar a la comba                                        | 2.900 (comp. baja) | Futuro blog                  |
+| ~~comba crossfit~~                                       |              1.900 | **Futuro** — sin producto    |
+| cuerda para saltar                                       |                720 | Sinónimo en copy             |
+| ~~comba boxeo~~                                          |                480 | **Futuro** — sin producto    |
+| cuerda de saltar                                         |                480 | Sinónimo en copy             |
+| comba de saltar                                          |                260 | Home (title)                 |
+| beneficios saltar a la comba                             |         170 (baja) | Futuro blog                  |
+| ~~comba lastrada~~                                       |                140 | **Futuro** — gap de producto |
+| comba profesional                                        |                110 | Copy home                    |
+| comprar comba · comba doble salto · ejercicios con comba |             70 c/u | Catálogo · futuro blog       |
+| speed rope · **comba segmentada** · beaded rope          |             50 c/u | Colecciones actuales         |
+| **comba pvc / combas pvc** · comba de velocidad          |             40 c/u | Colección PVC                |
+| mejores combas                                           |                 20 | Futuro blog comparativa      |
+| comba freestyle · comba de cuentas · comba beaded        |             10 c/u | Copy segmentadas             |
 
 ### English (Google US) — referencia para el mercado EN/EU
 
-| Keyword | Vol/mes | Targeting hoy |
-| --- | ---: | --- |
-| jump rope / jump ropes | 246.000 | Cabeza, inalcanzable a corto |
-| ~~weighted jump rope~~ | 14.800 | **Futuro** — sin producto |
-| jump rope for beginners | 6.600 | Copy segmentadas (beads = aprender) |
-| **beaded jump rope** · beaded skipping rope | 3.600 c/u | Colección segmentadas EN |
-| speed jump rope · skipping rope | 3.600 c/u | Colección PVC EN |
-| speed rope · best jump rope | 2.400 c/u | PVC EN · futuro blog |
-| **pvc jump rope** · ~~boxing jump rope~~ | 1.900 c/u | PVC EN · futuro |
-| ~~crossfit jump rope~~ | 1.300 | **Futuro** |
-| jump rope tricks / for tricks | 1.000 (comp. baja) | Copy segmentadas + futuro blog |
-| professional jump rope · for adults | 720 c/u | Copy home EN |
-| beaded rope | 390 | Secundaria |
-| freestyle jump rope · segmented jump rope | 90 c/u | Copy segmentadas EN |
-| best beaded jump rope | 70 | Futuro blog |
+| Keyword                                     |            Vol/mes | Targeting hoy                       |
+| ------------------------------------------- | -----------------: | ----------------------------------- |
+| jump rope / jump ropes                      |            246.000 | Cabeza, inalcanzable a corto        |
+| ~~weighted jump rope~~                      |             14.800 | **Futuro** — sin producto           |
+| jump rope for beginners                     |              6.600 | Copy segmentadas (beads = aprender) |
+| **beaded jump rope** · beaded skipping rope |          3.600 c/u | Colección segmentadas EN            |
+| speed jump rope · skipping rope             |          3.600 c/u | Colección PVC EN                    |
+| speed rope · best jump rope                 |          2.400 c/u | PVC EN · futuro blog                |
+| **pvc jump rope** · ~~boxing jump rope~~    |          1.900 c/u | PVC EN · futuro                     |
+| ~~crossfit jump rope~~                      |              1.300 | **Futuro**                          |
+| jump rope tricks / for tricks               | 1.000 (comp. baja) | Copy segmentadas + futuro blog      |
+| professional jump rope · for adults         |            720 c/u | Copy home EN                        |
+| beaded rope                                 |                390 | Secundaria                          |
+| freestyle jump rope · segmented jump rope   |             90 c/u | Copy segmentadas EN                 |
+| best beaded jump rope                       |                 70 | Futuro blog                         |
 
-> **Regla EN:** siempre «jump rope», nunca «rope» a secas — *beaded jump rope* (3.600)
-> vs *beaded rope* (390), 9×. Aplica a titles, H1 y nombres de producto EN.
+> **Regla EN:** siempre «jump rope», nunca «rope» a secas — _beaded jump rope_ (3.600)
+> vs _beaded rope_ (390), 9×. Aplica a titles, H1 y nombres de producto EN.
 
-Long-tail EN con intención clara (para FAQs y futuro blog): *beaded jump rope vs pvc ·
+Long-tail EN con intención clara (para FAQs y futuro blog): _beaded jump rope vs pvc ·
 best beaded jump rope for tricks · beaded jump rope for beginners · how to adjust beaded
-jump rope · benefits of beaded jump rope*. ES: *cómo ajustar la cuerda de saltar · largo de
-cuerda para saltar · comba decathlon (comparativa)*.
+jump rope · benefits of beaded jump rope_. ES: _cómo ajustar la cuerda de saltar · largo de
+cuerda para saltar · comba decathlon (comparativa)_.
 
 ## Cambios implementados (julio 2026)
 
 Hallazgos de la auditoría → fix aplicado:
 
-| # | Hallazgo | Fix |
-| --- | --- | --- |
-| 1 | Title de la home = «Paat Jumps» sin keywords | `home.metaTitle` ES/EN en diccionarios + `generateMetadata` |
-| 2 | Categorías sin H1 ni texto | H1 + descripción de colección (Shopify) + **FAQs** al pie con schema `FAQPage` |
-| 3 | `<html lang="es">` también en /en | Layouts raíz por grupo de rutas: `(store)/[locale]` (lang dinámico) y `admin`; `not-found`/`error` movidos al árbol de la tienda |
-| 4 | Meta description de producto = volcado de 700+ chars | `seo.description` escrita por producto en Shopify (`tools/seo/apply-seo.mjs`) + truncado de seguridad en código |
-| 5 | EN apuntaba a «Beaded Ropes» (390/mes) | Renombrado EN a «Beaded **Jump** Ropes» (colección y productos) vía traducciones de Shopify |
-| 6 | JSON-LD Product sin brand/url/price | Offer completo (price, currency, availability, url, itemCondition, priceValidUntil) + brand + imágenes |
-| 7 | Sin Organization/WebSite/BreadcrumbList | Organization + WebSite (con SearchAction) en el layout de tienda; BreadcrumbList en ficha y colección |
-| 8 | `/search/frontpage` indexable y en sitemap | Excluida del sitemap + `noindex` (igual que `hidden-*`) |
-| 9 | `/search` con title «Buscar» y sin H1 | «Todas las combas» + H1 + intro |
-| 10 | Fallback de description en inglés en ES | Fallback localizado por diccionario |
-| 11 | Sin Twitter card | `summary_large_image` global |
-| 12 | H1 del hero «combas​son» (falta espacio en el `<br>`) | Espacio añadido |
-| 13 | Sitemap sin x-default | Añadido |
+| #   | Hallazgo                                              | Fix                                                                                                                              |
+| --- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Title de la home = «Paat Jumps» sin keywords          | `home.metaTitle` ES/EN en diccionarios + `generateMetadata`                                                                      |
+| 2   | Categorías sin H1 ni texto                            | H1 + descripción de colección (Shopify) + **FAQs** al pie con schema `FAQPage`                                                   |
+| 3   | `<html lang="es">` también en /en                     | Layouts raíz por grupo de rutas: `(store)/[locale]` (lang dinámico) y `admin`; `not-found`/`error` movidos al árbol de la tienda |
+| 4   | Meta description de producto = volcado de 700+ chars  | `seo.description` escrita por producto en Shopify (`tools/seo/apply-seo.mjs`) + truncado de seguridad en código                  |
+| 5   | EN apuntaba a «Beaded Ropes» (390/mes)                | Renombrado EN a «Beaded **Jump** Ropes» (colección y productos) vía traducciones de Shopify                                      |
+| 6   | JSON-LD Product sin brand/url/price                   | Offer completo (price, currency, availability, url, itemCondition, priceValidUntil) + brand + imágenes                           |
+| 7   | Sin Organization/WebSite/BreadcrumbList               | Organization + WebSite (con SearchAction) en el layout de tienda; BreadcrumbList en ficha y colección                            |
+| 8   | `/search/frontpage` indexable y en sitemap            | Excluida del sitemap + `noindex` (igual que `hidden-*`)                                                                          |
+| 9   | `/search` con title «Buscar» y sin H1                 | «Todas las combas» + H1 + intro                                                                                                  |
+| 10  | Fallback de description en inglés en ES               | Fallback localizado por diccionario                                                                                              |
+| 11  | Sin Twitter card                                      | `summary_large_image` global                                                                                                     |
+| 12  | H1 del hero «combas​son» (falta espacio en el `<br>`) | Espacio añadido                                                                                                                  |
+| 13  | Sitemap sin x-default                                 | Añadido                                                                                                                          |
 
 **Pendiente manual (no automatizable desde código):**
 
@@ -111,13 +112,13 @@ Hallazgos de la auditoría → fix aplicado:
 
 ### Titles y descriptions
 
-| Página | Title (ES / EN) |
-| --- | --- |
-| Home | Combas de saltar profesionales hechas a mano \| Paat Jumps · Handmade Beaded & PVC Jump Ropes \| Paat Jumps |
+| Página      | Title (ES / EN)                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| Home        | Combas de saltar profesionales hechas a mano \| Paat Jumps · Handmade Beaded & PVC Jump Ropes \| Paat Jumps       |
 | Segmentadas | Combas segmentadas para freestyle y trucos \| Paat Jumps · Beaded Jump Ropes for Freestyle & Tricks \| Paat Jumps |
-| PVC | Combas PVC de velocidad y freestyle \| Paat Jumps · PVC Jump Ropes — Speed & Freestyle \| Paat Jumps |
-| /search | Todas las combas \| Paat Jumps · All Jump Ropes \| Paat Jumps |
-| Producto | El title es el nombre del producto (ya keyword-rich); solo se escribe `seo.description` |
+| PVC         | Combas PVC de velocidad y freestyle \| Paat Jumps · PVC Jump Ropes — Speed & Freestyle \| Paat Jumps              |
+| /search     | Todas las combas \| Paat Jumps · All Jump Ropes \| Paat Jumps                                                     |
+| Producto    | El title es el nombre del producto (ya keyword-rich); solo se escribe `seo.description`                           |
 
 Las meta descriptions de producto siguen la plantilla (~150 chars): material + hecho a mano
 en España + beneficio (ritmo/velocidad) + ajustable + envío. Ver `tools/seo/apply-seo.mjs`.
@@ -134,13 +135,13 @@ está en el **contenido indexable** (hoy las categorías no tenían ni una frase
 
 Demanda medida esperando catálogo — **no crear páginas antes de tener el producto**:
 
-| Oportunidad | Vol ES | Vol US | Producto necesario |
-| --- | ---: | ---: | --- |
-| Comba CrossFit (speed metálica) | 1.900 | 1.300 | Comba de cable/rodamientos para double unders |
-| Comba lastrada / weighted | 140 | 14.800 | Cuerda o mangos con peso |
-| Comba boxeo | 480 | 1.900 | PVC larga estilo boxeo (quizá reposicionable con la PVC actual) |
-| Comba niños / colegios | — | — | Pack infantil (las beaded ya encajan; falta ángulo B2B colegios) |
-| Long handle (freestyle avanzado) | — | 20 | Mangos largos |
+| Oportunidad                      | Vol ES | Vol US | Producto necesario                                               |
+| -------------------------------- | -----: | -----: | ---------------------------------------------------------------- |
+| Comba CrossFit (speed metálica)  |  1.900 |  1.300 | Comba de cable/rodamientos para double unders                    |
+| Comba lastrada / weighted        |    140 | 14.800 | Cuerda o mangos con peso                                         |
+| Comba boxeo                      |    480 |  1.900 | PVC larga estilo boxeo (quizá reposicionable con la PVC actual)  |
+| Comba niños / colegios           |      — |      — | Pack infantil (las beaded ya encajan; falta ángulo B2B colegios) |
+| Long handle (freestyle avanzado) |      — |     20 | Mangos largos                                                    |
 
 **Blog** (el 90 % del tráfico de Elevate; montar cuando toque — Shopify Blogs vía Storefront
 API o MDX en el repo):

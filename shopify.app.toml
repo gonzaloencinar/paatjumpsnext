@@ -21,7 +21,10 @@ api_version = "2026-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_discounts,read_discounts,read_orders,read_customers,read_checkouts"
+# write_merchant_managed_fulfillment_orders: crear fulfillments con tracking
+# desde el CRM cuando Packlink genera la etiqueta (lib/crm/packlink-sync.ts).
+# read_products: peso real de las variantes para el borrador Packlink.
+scopes = "write_discounts,read_discounts,read_orders,read_customers,read_checkouts,read_products,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { enrollCheckoutInCartRecovery } from "@/lib/crm/automation-engine";
+import { ensureDniRequest } from "@/lib/crm/dni-requests";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Webhooks de Shopify (plan §7.2 y §8): orders/create + checkouts/create|update.
@@ -61,6 +62,7 @@ type OrderPayload = {
   note_attributes?: { name?: string; value?: string | null }[];
   discount_codes?: { code?: string }[];
   customer?: { id?: number; email?: string | null } | null;
+  shipping_lines?: { title?: string | null }[];
   shipping_address?: OrderAddress | null;
   billing_address?: OrderAddress | null;
   discount_applications?: {
@@ -281,6 +283,7 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
     shipping_zip: address.zip ?? null,
     shipping_country: address.country ?? null,
     shipping_country_code: address.country_code ?? null,
+    shipping_line_title: order.shipping_lines?.[0]?.title ?? null,
     line_items: lineItems,
     upsell_revenue: Math.round(upsellRevenue * 100) / 100,
     utm_source: attr("utm_source"),
@@ -302,6 +305,28 @@ async function handleOrderCreate(supabase: Supabase, order: OrderPayload) {
     created_at: order.created_at ?? new Date().toISOString(),
     processed_at: order.processed_at ?? null,
   });
+
+  // Destino con aduana (Canarias/Ceuta/Melilla → ES, internacional → EN):
+  // petición de DNI por email con formulario propio (lib/crm/dni-requests.ts).
+  // Solo pedidos vivos sin enviar; el cron de 1 min manda el primer email.
+  if (
+    email &&
+    !order.test &&
+    !order.cancelled_at &&
+    !order.fulfillment_status
+  ) {
+    try {
+      await ensureDniRequest({
+        orderId: order.id,
+        orderName: order.name ?? null,
+        email,
+        countryCode: address.country_code,
+        zip: address.zip,
+      });
+    } catch (error) {
+      console.error("[webhooks/shopify] dni request", error);
+    }
+  }
 
   if (contact) {
     // Derivados recalculados desde la tabla → idempotente ante reintentos

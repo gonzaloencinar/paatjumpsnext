@@ -151,7 +151,9 @@ export function AppSidebar({ email }: { email: string }) {
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <SidebarMenuButton size="lg">
+                  // id explícito: el autogenerado de Base UI (useId) cambia
+                  // entre SSR e hidratación y dispara el aviso de React
+                  <SidebarMenuButton id="sidebar-user-menu" size="lg">
                     <Avatar className="size-8 rounded-lg">
                       <AvatarFallback className="rounded-lg uppercase">
                         {email.slice(0, 2) || "PJ"}

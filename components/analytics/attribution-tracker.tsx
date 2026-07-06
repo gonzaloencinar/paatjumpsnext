@@ -76,10 +76,7 @@ export function AttributionTracker() {
         content: get("utm_content"),
         gclid,
         fbclid,
-        landing: clean(
-          window.location.pathname + window.location.search,
-          200,
-        ),
+        landing: clean(window.location.pathname + window.location.search, 200),
         referrer,
         at: new Date().toISOString(),
       };

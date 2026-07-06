@@ -83,7 +83,9 @@ export default async function FinancePage({
     projected,
     totals,
     packlink,
+    genei,
   } = data;
+  const shippingCost = packlink.cost + genei.cost;
 
   const isFuture = month > currentMonth;
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -206,9 +208,15 @@ export default async function FinancePage({
                   </dt>
                   <dd>−{formatMoney(packlink.cost)}</dd>
                 </div>
+                {genei.count > 0 || genei.cost > 0 ? (
+                  <div className="flex justify-between gap-2">
+                    <dt>Envíos Genei sin IVA ({genei.count} env., Gonzalo)</dt>
+                    <dd>−{formatMoney(genei.cost)}</dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <dt>Otros gastos</dt>
-                  <dd>−{formatMoney(totals.expenses - packlink.cost)}</dd>
+                  <dd>−{formatMoney(totals.expenses - shippingCost)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt>Beneficio bruto</dt>
@@ -326,7 +334,7 @@ export default async function FinancePage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {movements.length === 0 && packlink.cost <= 0 ? (
+            {movements.length === 0 && shippingCost <= 0 ? (
               <Empty className="rounded-xl border border-dashed">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -357,36 +365,43 @@ export default async function FinancePage({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {packlink.cost > 0 ? (
-                      <TableRow>
-                        <TableCell>
-                          <div className="flex min-w-0 flex-col gap-0.5">
-                            <span className="truncate font-medium">
-                              Envíos Packlink
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <Badge variant="outline">Automático</Badge>
-                              <span className="truncate text-xs text-muted-foreground">
-                                {packlink.count} envíos del mes, sin IVA
+                    {(
+                      [
+                        { label: "Envíos Packlink", summary: packlink },
+                        { label: "Envíos Genei", summary: genei },
+                      ] as const
+                    ).map(({ label, summary }) =>
+                      summary.cost > 0 ? (
+                        <TableRow key={label}>
+                          <TableCell>
+                            <div className="flex min-w-0 flex-col gap-0.5">
+                              <span className="truncate font-medium">
+                                {label}
                               </span>
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">Gasto</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <PartnerBadge partner="gonzalo" />
-                        </TableCell>
-                        <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                          Todo el mes
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          −{formatMoney(packlink.cost)}
-                        </TableCell>
-                        <TableCell />
-                      </TableRow>
-                    ) : null}
+                              <span className="flex items-center gap-1.5">
+                                <Badge variant="outline">Automático</Badge>
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {summary.count} envíos del mes, sin IVA
+                                </span>
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">Gasto</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <PartnerBadge partner="gonzalo" />
+                          </TableCell>
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                            Todo el mes
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">
+                            −{formatMoney(summary.cost)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                      ) : null,
+                    )}
                     {movements.map(({ entry, projected: isProjected }) => (
                       <TableRow key={entry.id}>
                         <TableCell>

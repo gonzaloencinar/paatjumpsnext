@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
-import { syncPacklinkShipments } from "@/lib/crm/packlink-sync";
+import {
+  pushPacklinkFulfillments,
+  syncGeneiShipments,
+  syncPacklinkShipments,
+} from "@/lib/crm/packlink-sync";
 
-// Sincronización Packlink PRO → CRM (lib/crm/packlink-sync.ts): Vercel Cron
-// cada hora con `Authorization: Bearer CRON_SECRET`. Cada ejecución recorre
-// el listado completo (volumen pequeño) y upsertea por referencia, así que
-// también re-extrae campos tras un cambio en el extractor.
+// Sincronización Packlink PRO + Genei → CRM (lib/crm/packlink-sync.ts):
+// Vercel Cron cada 10 min con `Authorization: Bearer CRON_SECRET`. Cada
+// ejecución recorre el listado completo de Packlink (volumen pequeño) y
+// upsertea por referencia, así que también re-extrae campos tras un cambio en
+// el extractor; después refresca los envíos Genei no finales. Por último
+// empuja a Shopify los fulfillments de las etiquetas ya compradas (tracking
+// incluido).
 
 export const maxDuration = 60;
 
@@ -17,7 +24,14 @@ export async function GET(request: Request) {
 
   try {
     const result = await syncPacklinkShipments();
-    return NextResponse.json({ ok: true, ...result });
+    const genei = await syncGeneiShipments();
+    const fulfillments = await pushPacklinkFulfillments();
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      geneiSynced: genei.synced,
+      ...fulfillments,
+    });
   } catch (error) {
     console.error("[cron/packlink-sync]", error);
     return NextResponse.json(

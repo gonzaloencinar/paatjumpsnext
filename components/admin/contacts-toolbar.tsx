@@ -130,9 +130,7 @@ export function ContactsToolbar() {
         <SelectContent>
           <SelectGroup>
             <SelectItem value="all">Cualquier actividad</SelectItem>
-            <SelectItem value="activos">
-              Activos ≤{ACTIVITY_DAYS} d
-            </SelectItem>
+            <SelectItem value="activos">Activos ≤{ACTIVITY_DAYS} d</SelectItem>
             <SelectItem value="dormidos">
               Dormidos &gt;{ACTIVITY_DAYS} d
             </SelectItem>

@@ -160,9 +160,7 @@ export default async function AnalyticsPage({
             previous={data.period.prevOrders}
           />
           {data.period.withDiscount > 0 ? (
-            <span>
-              {nf.format(data.period.withDiscount)} con código
-            </span>
+            <span>{nf.format(data.period.withDiscount)} con código</span>
           ) : null}
         </span>
       ),
@@ -197,7 +195,9 @@ export default async function AnalyticsPage({
     },
     {
       label: "Clientes del periodo",
-      value: nf.format(data.period.newCustomers + data.period.returningCustomers),
+      value: nf.format(
+        data.period.newCustomers + data.period.returningCustomers,
+      ),
       hint: `${nf.format(data.period.newCustomers)} nuevos · ${nf.format(
         data.period.returningCustomers,
       )} recurrentes`,
@@ -259,8 +259,8 @@ export default async function AnalyticsPage({
               <EmptyDescription>
                 En cuanto el cron shopify-sync traiga pedidos (necesita los
                 scopes read_orders y read_customers en la custom app) esta
-                página se llena sola: ingresos, AOV, LTV, recurrencia,
-                geografía y atribución UTM.
+                página se llena sola: ingresos, AOV, LTV, recurrencia, geografía
+                y atribución UTM.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -293,8 +293,7 @@ export default async function AnalyticsPage({
                   {period.days
                     ? `Últimos ${period.label}`
                     : "Todo el histórico"}{" "}
-                  · netos de reembolsos, por{" "}
-                  {data.series.daily ? "día" : "mes"}
+                  · netos de reembolsos, por {data.series.daily ? "día" : "mes"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -405,12 +404,8 @@ export default async function AnalyticsPage({
                       <TableHeader>
                         <TableRow>
                           <TableHead>Producto</TableHead>
-                          <TableHead className="text-right">
-                            Unidades
-                          </TableHead>
-                          <TableHead className="text-right">
-                            Ingresos
-                          </TableHead>
+                          <TableHead className="text-right">Unidades</TableHead>
+                          <TableHead className="text-right">Ingresos</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>

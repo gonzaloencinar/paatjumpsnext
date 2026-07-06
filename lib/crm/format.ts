@@ -71,6 +71,20 @@ export const ORDER_FULFILLMENT_STATUS: Record<
   restocked: { label: "Devuelto a stock", badge: "secondary" },
 };
 
+// Fases del envío Packlink (lib/crm/packlink.ts → packlinkPhase)
+export const PACKLINK_PHASE: Record<
+  string,
+  { label: string; badge: BadgeVariant }
+> = {
+  borrador: { label: "Borrador", badge: "secondary" },
+  etiqueta: { label: "Etiqueta generada", badge: "outline" },
+  recogida: { label: "Pendiente recogida", badge: "outline" },
+  enviado: { label: "Enviado", badge: "default" },
+  entregado: { label: "Entregado", badge: "default" },
+  incidencia: { label: "Incidencia", badge: "destructive" },
+  cancelado: { label: "Cancelado", badge: "secondary" },
+};
+
 // Estados del ciclo de un carrito/checkout (webhook + tracking storefront)
 export const CHECKOUT_STATUS: Record<
   string,

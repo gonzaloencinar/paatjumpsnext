@@ -270,13 +270,21 @@ export type YearRow = {
   transfer: MonthTotals["transfer"];
 };
 
-// Envíos de Packlink del mes (coste real SIN IVA, sincronizado por cron):
-// entran directos como gasto automático de Gonzalo.
+// Envíos ya pagados del mes (coste real SIN IVA, sincronizado por cron),
+// desglosados por proveedor: entran directos como gasto automático de
+// Gonzalo (él paga tanto Packlink PRO como el saldo de Genei).
 export type PacklinkSummary = {
   count: number;
   cost: number;
   missingCost: number; // envíos sin coste extraíble (revisar extractor)
 };
+
+type ShippingByProvider = { packlink: PacklinkSummary; genei: PacklinkSummary };
+
+const emptyShipping = (): ShippingByProvider => ({
+  packlink: { count: 0, cost: 0, missingCost: 0 },
+  genei: { count: 0, cost: 0, missingCost: 0 },
+});
 
 export type FinanceData = {
   month: string;
@@ -291,6 +299,7 @@ export type FinanceData = {
   recurrings: FinanceRecurring[];
   yearRows: YearRow[];
   packlink: PacklinkSummary;
+  genei: PacklinkSummary;
 };
 
 export async function getFinanceData(
@@ -337,7 +346,7 @@ export async function getFinanceData(
   const [
     { data: entryRows, error: entriesError },
     shopifyByMonth,
-    packlinkByMonth,
+    shippingByMonth,
   ] = await Promise.all([
     supabase
       .from("finance_entries")
@@ -347,7 +356,7 @@ export async function getFinanceData(
       .lte("entry_date", `${year}-12-31`)
       .order("entry_date", { ascending: true }),
     getShopifyByMonth(supabase, year),
-    getPacklinkByMonth(supabase),
+    getShippingByMonth(supabase),
   ]);
   if (entriesError) throw entriesError;
   const yearEntries = entryRows ?? [];
@@ -369,16 +378,15 @@ export async function getFinanceData(
           .map((occ) => ({ ...occ, projected: true as const }))
       : [];
 
-  const packlinkFor = (m: string) =>
-    packlinkByMonth.get(m) ?? { count: 0, cost: 0, missingCost: 0 };
+  const shippingFor = (m: string) => shippingByMonth.get(m) ?? emptyShipping();
+  const shippingCost = (m: string) => {
+    const s = shippingFor(m);
+    return s.packlink.cost + s.genei.cost;
+  };
 
   const totals = computeMonthTotals(
     shopify.net,
-    [
-      ...entries,
-      ...projected,
-      ...shippingExpenseEntry(packlinkFor(month).cost),
-    ],
+    [...entries, ...projected, ...shippingExpenseEntry(shippingCost(month))],
     irpfPct,
   );
 
@@ -397,17 +405,19 @@ export async function getFinanceData(
       net: 0,
       shipping: 0,
     };
+    const monthShipping = shippingFor(m);
     if (
       monthEntries.length === 0 &&
       monthShopify.orders === 0 &&
-      packlinkFor(m).count === 0 &&
+      monthShipping.packlink.count === 0 &&
+      monthShipping.genei.count === 0 &&
       m !== month
     ) {
       continue;
     }
     const t = computeMonthTotals(
       monthShopify.net,
-      [...monthEntries, ...shippingExpenseEntry(packlinkFor(m).cost)],
+      [...monthEntries, ...shippingExpenseEntry(shippingCost(m))],
       pctFor(m),
     );
     yearRows.push({
@@ -432,7 +442,8 @@ export async function getFinanceData(
     totals,
     recurrings,
     yearRows,
-    packlink: packlinkFor(month),
+    packlink: shippingFor(month).packlink,
+    genei: shippingFor(month).genei,
   };
 }
 
@@ -485,27 +496,29 @@ export async function freezePastMonthsIrpf(
   if (error) throw error;
 }
 
-// Envíos de Packlink (sync horario) agrupados por mes de Madrid. Solo cuentan
-// los ya comprados (estados post-compra); volumen pequeño → todo en TS.
-async function getPacklinkByMonth(
+// Envíos ya pagados (sync del cron) agrupados por mes de Madrid y desglosados
+// por proveedor (Packlink PRO / Genei). Solo cuentan los estados post-compra;
+// volumen pequeño → todo en TS.
+async function getShippingByMonth(
   supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<Map<string, PacklinkSummary>> {
+): Promise<Map<string, ShippingByProvider>> {
   const { data, error } = await supabase
     .from("packlink_shipments")
-    .select("cost, state, shipment_date, synced_at")
+    .select("provider, cost, state, shipment_date, synced_at")
     .limit(5000);
   if (error) throw error;
 
-  const map = new Map<string, PacklinkSummary>();
+  const map = new Map<string, ShippingByProvider>();
   for (const shipment of data ?? []) {
     if (!isPurchasedShipment(shipment.state)) continue;
     const date = shipment.shipment_date ?? shipment.synced_at;
     const month = MADRID_MONTH_FMT.format(new Date(date)).slice(0, 7);
-    const row = map.get(month) ?? { count: 0, cost: 0, missingCost: 0 };
+    const both = map.get(month) ?? emptyShipping();
+    const row = shipment.provider === "genei" ? both.genei : both.packlink;
     row.count += 1;
     if (shipment.cost === null) row.missingCost += 1;
     else row.cost += shipment.cost;
-    map.set(month, row);
+    map.set(month, both);
   }
   return map;
 }
