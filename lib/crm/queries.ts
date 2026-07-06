@@ -514,7 +514,7 @@ export async function getCartsData(params: { estado?: string; page?: number }) {
   let listQuery = supabase
     .from("checkouts")
     .select(
-      "id, origin, status, email, contact_id, line_items, total_price, currency, abandoned_at, last_event_at, recovery_sent_at, contacts(first_name), automation_enrollments(step, status, next_run_at), email_sends(id, subject, status, sent_at, opened_at, clicked_at)",
+      "id, origin, status, email, contact_id, line_items, total_price, currency, created_at, abandoned_at, last_event_at, recovery_sent_at, recovery_url, buyer_accepts_marketing, contacts(first_name), automation_enrollments(step, status, next_run_at), email_sends(id, subject, status, sent_at, opened_at, clicked_at)",
       { count: "exact" },
     )
     .order("last_event_at", { ascending: false })

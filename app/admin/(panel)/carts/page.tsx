@@ -2,10 +2,9 @@ import Link from "next/link";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  ClockIcon,
-  MailIcon,
   ShoppingCartIcon,
 } from "lucide-react";
+import { CartsTable } from "@/components/admin/carts-table";
 import { PageHeader } from "@/components/admin/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,38 +15,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  CHECKOUT_ORIGIN,
-  CHECKOUT_STATUS,
-  EMAIL_SEND_STATUS,
-  formatDateTime,
-  formatMoney,
-  timeAgo,
-} from "@/lib/crm/format";
+import { formatMoney } from "@/lib/crm/format";
 import { getCartsData } from "@/lib/crm/queries";
 
 export const metadata = { title: "Carritos" };
 
 const nf = new Intl.NumberFormat("es-ES");
-
-type LineItem = { title?: string; quantity?: number };
-
-function itemsSummary(raw: unknown) {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  const items = raw as LineItem[];
-  const units = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-  const first = items[0]?.title ?? "";
-  const extra = items.length - 1;
-  return `${units} ud. · ${first}${extra > 0 ? ` +${extra}` : ""}`;
-}
 
 const FILTERS: { key?: string; label: string }[] = [
   { label: "Todos" },
@@ -178,152 +151,7 @@ export default async function CartsPage({
           </Empty>
         ) : (
           <>
-            <div className="overflow-hidden rounded-xl border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Carrito</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Recuperación</TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Actividad
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {carts.map((cart) => {
-                    const status = CHECKOUT_STATUS[cart.status] ?? {
-                      label: cart.status,
-                      badge: "outline" as const,
-                    };
-                    const summary = itemsSummary(cart.line_items);
-                    const sends = [...cart.email_sends].sort((a, b) =>
-                      (a.sent_at ?? "").localeCompare(b.sent_at ?? ""),
-                    );
-                    const enrollment = cart.automation_enrollments.find(
-                      (e) => e.status === "active",
-                    );
-                    return (
-                      <TableRow key={cart.id}>
-                        <TableCell>
-                          <div className="flex min-w-0 flex-col gap-0.5">
-                            <span>
-                              <Badge variant="outline">
-                                {CHECKOUT_ORIGIN[cart.origin] ?? cart.origin}
-                              </Badge>
-                            </span>
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                              {formatDateTime(cart.abandoned_at)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex min-w-0 flex-col">
-                            {cart.contact_id ? (
-                              <Link
-                                href={`/admin/contacts/${cart.contact_id}`}
-                                className="truncate transition-colors hover:text-orange-400"
-                              >
-                                {cart.contacts?.first_name?.trim() ||
-                                  cart.email}
-                              </Link>
-                            ) : (
-                              <span className="truncate">
-                                {cart.email ?? "Sin email"}
-                              </span>
-                            )}
-                            {summary ? (
-                              <span className="truncate text-xs text-muted-foreground">
-                                {summary}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                Carrito vacío
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {cart.total_price != null
-                            ? formatMoney(
-                                cart.total_price,
-                                cart.currency ?? "EUR",
-                              )
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={status.badge}>{status.label}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex min-w-0 flex-col gap-1">
-                            {sends.length === 0 && !enrollment ? (
-                              <span className="text-xs text-muted-foreground">
-                                Sin emails
-                              </span>
-                            ) : null}
-                            {sends.map((send) => {
-                              const sendStatus =
-                                send.status !== "sent" &&
-                                send.status !== "delivered" &&
-                                send.status !== "queued"
-                                  ? (EMAIL_SEND_STATUS[send.status]?.label ??
-                                    send.status)
-                                  : null;
-                              return (
-                                <span
-                                  key={send.id}
-                                  className="flex min-w-0 items-center gap-1.5 text-xs"
-                                >
-                                  <MailIcon
-                                    aria-hidden
-                                    className="size-3 shrink-0 text-muted-foreground"
-                                  />
-                                  <span className="truncate">
-                                    {send.subject ?? "Email"}
-                                  </span>
-                                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                                    {send.sent_at ? timeAgo(send.sent_at) : ""}
-                                  </span>
-                                  {sendStatus ? (
-                                    <Badge variant="destructive">
-                                      {sendStatus}
-                                    </Badge>
-                                  ) : (
-                                    <span className="shrink-0 text-muted-foreground">
-                                      {send.clicked_at
-                                        ? "· clic ✓"
-                                        : send.opened_at
-                                          ? "· abierto"
-                                          : ""}
-                                    </span>
-                                  )}
-                                </span>
-                              );
-                            })}
-                            {enrollment?.next_run_at ? (
-                              <span className="flex items-center gap-1.5 text-xs text-orange-400">
-                                <ClockIcon
-                                  aria-hidden
-                                  className="size-3 shrink-0"
-                                />
-                                Próximo email {timeAgo(enrollment.next_run_at)}
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden text-muted-foreground lg:table-cell">
-                          {cart.last_event_at
-                            ? timeAgo(cart.last_event_at)
-                            : "—"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <CartsTable carts={carts} />
 
             {totalPages > 1 ? (
               <div className="flex items-center justify-between gap-4">
