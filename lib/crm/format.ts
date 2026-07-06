@@ -155,6 +155,27 @@ export function eventLabel(type: string) {
   return EVENT_TYPE_LABEL[type] ?? type;
 }
 
+// Finanzas de socios (/admin/finance)
+export type FinancePartner = "gonzalo" | "patri";
+
+export const FINANCE_PARTNERS: FinancePartner[] = ["gonzalo", "patri"];
+
+export const FINANCE_PARTNER_LABEL: Record<FinancePartner, string> = {
+  gonzalo: "Gonzalo",
+  patri: "Patri",
+};
+
+export const FINANCE_FREQUENCIES: Record<
+  string,
+  { label: string; months: number }
+> = {
+  monthly: { label: "Mensual", months: 1 },
+  bimonthly: { label: "Bimestral", months: 2 },
+  quarterly: { label: "Trimestral", months: 3 },
+  semiannual: { label: "Semestral", months: 6 },
+  yearly: { label: "Anual", months: 12 },
+};
+
 // Zona horaria fija: el server (Vercel) corre en UTC y el panel se opera
 // desde España — sin esto las horas saldrían desplazadas según dónde rendericen.
 const TZ = "Europe/Madrid";

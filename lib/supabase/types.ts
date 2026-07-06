@@ -672,6 +672,146 @@ export type Database = {
           },
         ];
       };
+      finance_entries: {
+        Row: {
+          amount: number;
+          concept: string;
+          created_at: string;
+          deleted_at: string | null;
+          entry_date: string;
+          id: string;
+          notes: string | null;
+          partner: string;
+          period: string | null;
+          recurring_id: string | null;
+          type: string;
+          updated_at: string;
+        };
+        Insert: {
+          amount: number;
+          concept: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          entry_date?: string;
+          id?: string;
+          notes?: string | null;
+          partner: string;
+          period?: string | null;
+          recurring_id?: string | null;
+          type: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount?: number;
+          concept?: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          entry_date?: string;
+          id?: string;
+          notes?: string | null;
+          partner?: string;
+          period?: string | null;
+          recurring_id?: string | null;
+          type?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "finance_entries_recurring_id_fkey";
+            columns: ["recurring_id"];
+            isOneToOne: false;
+            referencedRelation: "finance_recurring";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      finance_month_irpf: {
+        Row: {
+          created_at: string;
+          irpf_pct: number;
+          month: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          irpf_pct: number;
+          month: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          irpf_pct?: number;
+          month?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      finance_recurring: {
+        Row: {
+          active: boolean;
+          amount: number;
+          concept: string;
+          created_at: string;
+          day_of_month: number;
+          ends_on: string | null;
+          frequency: string;
+          id: string;
+          notes: string | null;
+          partner: string;
+          starts_on: string;
+          type: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          amount: number;
+          concept: string;
+          created_at?: string;
+          day_of_month?: number;
+          ends_on?: string | null;
+          frequency?: string;
+          id?: string;
+          notes?: string | null;
+          partner: string;
+          starts_on?: string;
+          type?: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          amount?: number;
+          concept?: string;
+          created_at?: string;
+          day_of_month?: number;
+          ends_on?: string | null;
+          frequency?: string;
+          id?: string;
+          notes?: string | null;
+          partner?: string;
+          starts_on?: string;
+          type?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      finance_settings: {
+        Row: {
+          id: boolean;
+          irpf_pct: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          irpf_pct?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          irpf_pct?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       orders: {
         Row: {
           campaign_id: string | null;
@@ -839,6 +979,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      packlink_shipments: {
+        Row: {
+          carrier: string | null;
+          cost: number | null;
+          currency: string | null;
+          custom_reference: string | null;
+          raw: Json;
+          reference: string;
+          service: string | null;
+          shipment_date: string | null;
+          state: string | null;
+          synced_at: string;
+        };
+        Insert: {
+          carrier?: string | null;
+          cost?: number | null;
+          currency?: string | null;
+          custom_reference?: string | null;
+          raw: Json;
+          reference: string;
+          service?: string | null;
+          shipment_date?: string | null;
+          state?: string | null;
+          synced_at?: string;
+        };
+        Update: {
+          carrier?: string | null;
+          cost?: number | null;
+          currency?: string | null;
+          custom_reference?: string | null;
+          raw?: Json;
+          reference?: string;
+          service?: string | null;
+          shipment_date?: string | null;
+          state?: string | null;
+          synced_at?: string;
+        };
+        Relationships: [];
       };
       promotions: {
         Row: {

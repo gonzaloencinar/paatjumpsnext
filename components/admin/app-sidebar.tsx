@@ -17,6 +17,7 @@ import {
   StoreIcon,
   TicketPercentIcon,
   UsersIcon,
+  WalletIcon,
   WorkflowIcon,
 } from "lucide-react";
 import LogoIcon from "components/icons/logo";
@@ -55,6 +56,7 @@ const NAV_GROUPS = [
       { title: "Pedidos", href: "/admin/orders", icon: PackageIcon },
       { title: "Carritos", href: "/admin/carts", icon: ShoppingCartIcon },
       { title: "Clientes", href: "/admin/customers", icon: ContactRoundIcon },
+      { title: "Finanzas", href: "/admin/finance", icon: WalletIcon },
     ],
   },
   {
