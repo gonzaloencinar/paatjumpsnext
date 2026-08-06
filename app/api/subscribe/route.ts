@@ -1,18 +1,20 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { enrollContactInSignupAutomations } from "@/lib/crm/automation-engine";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { CRM } from "@/lib/crm/config";
 import { IDENTITY_COOKIE, IDENTITY_MAX_AGE } from "@/lib/crm/identity";
 import { getActiveGeneralPromotion } from "@/lib/crm/promotions";
 import { sendCrmEmail } from "@/lib/email/send";
 import { WelcomeEmail } from "@/lib/email/templates/welcome";
 import { identityToken, unsubscribeUrl } from "@/lib/email/tokens";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Alta desde la barra de captación (plan §7.1). Single opt-in (decisión
-// 2026-07-02): el código va directo en la bienvenida.
+// 2026-07-02): el código va directo en la bienvenida. El rate limit por IP,
+// el check de supresión y el upsert idempotente del contacto (con su evento)
+// ocurren en una sola mutation Convex (api.contacts.subscribe).
 export async function POST(request: Request) {
   let body: {
     email?: unknown;
@@ -58,87 +60,35 @@ export async function POST(request: Request) {
   const ip =
     (request.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() ||
     null;
-  const supabase = createAdminClient();
+
+  let result;
+  try {
+    result = await convexMutation(api.contacts.subscribe, {
+      email,
+      firstName,
+      ip,
+    });
+  } catch (error) {
+    console.error("subscribe: fallo creando el contacto", error);
+    return NextResponse.json(
+      { ok: false, error: "server_error" },
+      { status: 500 },
+    );
+  }
 
   // Rate limit blando: máx. 5 altas/hora por IP (+ honeypot + email unique).
-  if (ip) {
-    const { count } = await supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("consent_ip", ip)
-      .gte("created_at", new Date(Date.now() - 3_600_000).toISOString());
-    if ((count ?? 0) >= 5) {
-      return NextResponse.json(
-        { ok: false, error: "rate_limited" },
-        { status: 429 },
-      );
-    }
+  if (result.status === "rate_limited") {
+    return NextResponse.json(
+      { ok: false, error: "rate_limited" },
+      { status: 429 },
+    );
   }
-
   // Suprimidos: éxito silencioso (no revelar que la dirección está en la lista).
-  const { data: suppressed } = await supabase
-    .from("suppressions")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
-  if (suppressed) return NextResponse.json({ ok: true });
-
-  // Contacto (idempotente: repetir el alta reenvía el MISMO código).
-  const { data: existing } = await supabase
-    .from("contacts")
-    .select("id, status")
-    .eq("email", email)
-    .maybeSingle();
-
-  let contactId: string;
-  // Alta nueva o re-suscripción → entra en las secuencias de bienvenida
-  // (§16.4); el reenvío idempotente de un ya-suscrito no re-inscribe.
-  const isNewSignup = !existing || existing.status !== "subscribed";
-  if (existing) {
-    contactId = existing.id;
-    if (existing.status !== "subscribed") {
-      await supabase
-        .from("contacts")
-        .update({
-          status: "subscribed",
-          consent: true,
-          consent_at: new Date().toISOString(),
-          consent_ip: ip,
-        })
-        .eq("id", contactId);
-      await supabase.from("events").insert({
-        contact_id: contactId,
-        type: "signup",
-        payload: { source: "sticky_bar", resubscribe: true },
-      });
-    }
-  } else {
-    const { data: created, error } = await supabase
-      .from("contacts")
-      .insert({
-        email,
-        first_name: firstName,
-        status: "subscribed",
-        source: "sticky_bar",
-        consent: true,
-        consent_at: new Date().toISOString(),
-        consent_ip: ip,
-      })
-      .select("id")
-      .single();
-    if (error || !created) {
-      return NextResponse.json(
-        { ok: false, error: "server_error" },
-        { status: 500 },
-      );
-    }
-    contactId = created.id;
-    await supabase.from("events").insert({
-      contact_id: contactId,
-      type: "signup",
-      payload: { source: "sticky_bar" },
-    });
+  if (result.status === "suppressed") {
+    return NextResponse.json({ ok: true });
   }
+
+  const { contactId, isNewSignup } = result;
 
   // Código compartido de la promo general vigente (decisión 2026-07-02: un
   // único código por promoción, gestionado en /admin/promotions y en sync
@@ -178,7 +128,8 @@ export async function POST(request: Request) {
 
   if (isNewSignup) {
     try {
-      await enrollContactInSignupAutomations(contactId);
+      // Alta nueva o re-suscripción → secuencias de bienvenida (§16.4)
+      await convexMutation(api.automations.enrollOnSignup, { contactId });
     } catch (error) {
       // La inscripción nunca rompe el alta; el fallo queda en logs
       console.error("subscribe: fallo inscribiendo en secuencias", error);

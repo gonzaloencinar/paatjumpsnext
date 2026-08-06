@@ -57,7 +57,8 @@ export function Timeline({
   events,
 }: {
   events: {
-    id: number;
+    // number (bigint legacy) o string (_id de Convex): solo se usa como key
+    id: number | string;
     type: string;
     payload: Json | null;
     created_at: string;

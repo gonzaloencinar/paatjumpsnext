@@ -8,9 +8,14 @@
  * @module
  */
 
+import type * as automations from "../automations.js";
 import type * as billing from "../billing.js";
 import type * as blog from "../blog.js";
+import type * as campaigns from "../campaigns.js";
+import type * as carts from "../carts.js";
+import type * as contacts from "../contacts.js";
 import type * as dni from "../dni.js";
+import type * as emails from "../emails.js";
 import type * as finance from "../finance.js";
 import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
@@ -26,9 +31,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  automations: typeof automations;
   billing: typeof billing;
   blog: typeof blog;
+  campaigns: typeof campaigns;
+  carts: typeof carts;
+  contacts: typeof contacts;
   dni: typeof dni;
+  emails: typeof emails;
   finance: typeof finance;
   "lib/server": typeof lib_server;
   links: typeof links;
