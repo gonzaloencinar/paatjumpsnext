@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { baseUrl } from "@/lib/utils";
 
 // Acortador de enlaces del CRM: /l/<slug> → destino con los UTMs del enlace
 // (p. ej. /l/bio para la biografía de Instagram). Los enlaces se gestionan en
-// /admin/links; cada visita suma un clic vía register_link_click (un solo
+// /admin/links; cada visita suma un clic en la misma mutation (un solo
 // roundtrip). El proxy deja pasar /l/* sin el rewrite de locales; el idioma
 // lo decide después el middleware al aterrizar en el destino.
 
@@ -21,18 +22,17 @@ export async function GET(
   let target = new URL(baseUrl);
   if (clean) {
     try {
-      const supabase = createAdminClient();
-      const { data } = await supabase
-        .rpc("register_link_click", { p_slug: clean })
-        .maybeSingle();
+      const data = await convexMutation(api.links.resolveAndRegisterClick, {
+        slug: clean,
+      });
       if (data?.destination) {
         target = new URL(data.destination, baseUrl);
         const utms = [
-          ["utm_source", data.utm_source],
-          ["utm_medium", data.utm_medium],
-          ["utm_campaign", data.utm_campaign],
-          ["utm_term", data.utm_term],
-          ["utm_content", data.utm_content],
+          ["utm_source", data.utmSource],
+          ["utm_medium", data.utmMedium],
+          ["utm_campaign", data.utmCampaign],
+          ["utm_term", data.utmTerm],
+          ["utm_content", data.utmContent],
         ] as const;
         for (const [key, value] of utms) {
           if (value && !target.searchParams.has(key)) {

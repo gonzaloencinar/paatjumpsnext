@@ -20,8 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { api } from "@/convex/_generated/api";
+import { convexQuery, msToIso } from "@/lib/convex/server";
 import { timeAgo } from "@/lib/crm/format";
-import { createClient } from "@/lib/supabase/server";
 import { baseUrl } from "@/lib/utils";
 
 export const metadata = { title: "Enlaces" };
@@ -29,12 +30,22 @@ export const metadata = { title: "Enlaces" };
 const nf = new Intl.NumberFormat("es-ES");
 
 export default async function LinksPage() {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("short_links")
-    .select("*")
-    .order("created_at", { ascending: false });
-  const links = data ?? [];
+  const docs = await convexQuery(api.links.list, {});
+  // Forma legacy (snake_case, ISO, null) que esperan los componentes
+  const links = docs.map((doc) => ({
+    id: doc._id,
+    slug: doc.slug,
+    aliases: doc.aliases,
+    destination: doc.destination,
+    utm_source: doc.utmSource ?? null,
+    utm_medium: doc.utmMedium ?? null,
+    utm_campaign: doc.utmCampaign ?? null,
+    utm_term: doc.utmTerm ?? null,
+    utm_content: doc.utmContent ?? null,
+    notes: doc.notes ?? null,
+    clicks: doc.clicks,
+    last_clicked_at: msToIso(doc.lastClickedAt),
+  }));
 
   return (
     <div className="flex flex-col">

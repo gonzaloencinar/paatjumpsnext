@@ -1,84 +1,53 @@
 import {
-  ACTIVITY_DAYS,
+  buildFacetsContext,
+  contactMatchesFacets,
   countSegmentAudience,
-  VIP_MIN_DEFAULT,
+  type SegmentContactRow,
   type SegmentFacets,
 } from "@/lib/crm/segments";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/convex/_generated/api";
+import { convexQuery, msToIso } from "@/lib/convex/server";
+import type { FunctionReturnType } from "convex/server";
+
+// Lecturas del panel CRM (/admin): los datos viven en Convex y este módulo
+// adapta los docs a la forma legacy (snake_case, ISO, null) que esperan las
+// páginas y componentes. Tablas pequeñas: los filtros, la paginación y las
+// agregaciones se hacen en memoria sobre el conjunto completo (mismo patrón
+// que lib/crm/store-queries.ts).
 
 export const CONTACTS_PER_PAGE = 25;
 
 const DAY_MS = 86_400_000;
 
-export async function getDashboardData() {
-  const supabase = await createClient();
-  const now = Date.now();
-  const since7 = new Date(now - 7 * DAY_MS).toISOString();
-  const since30 = new Date(now - 30 * DAY_MS).toISOString();
+// Contacto en la forma legacy Tables<"contacts"> (snake_case, ISO, null)
+type ContactRow = FunctionReturnType<typeof api.contacts.list>[number];
 
-  const [
-    subscribed,
-    pending,
-    new7,
-    signups,
-    sent,
-    opened,
-    clicked,
-    abandoned,
-    recovered,
-    orders,
-    recentEvents,
-  ] = await Promise.all([
-    supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "subscribed"),
-    supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", since7),
-    supabase
-      .from("events")
-      .select("created_at")
-      .eq("type", "signup")
-      .gte("created_at", since30)
-      .limit(5000),
-    supabase
-      .from("email_sends")
-      .select("id", { count: "exact", head: true })
-      .not("sent_at", "is", null),
-    supabase
-      .from("email_sends")
-      .select("id", { count: "exact", head: true })
-      .not("opened_at", "is", null),
-    supabase
-      .from("email_sends")
-      .select("id", { count: "exact", head: true })
-      .not("clicked_at", "is", null),
-    supabase
-      .from("checkouts")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "abandoned"),
-    supabase
-      .from("checkouts")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["recovered", "converted"]),
-    supabase
-      .from("orders")
-      .select("total_price, total_refunded, discount_code")
-      .eq("test", false)
-      .is("cancelled_at", null)
-      .limit(5000),
-    supabase
-      .from("events")
-      .select("id, type, payload, created_at, contacts(email, first_name)")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
+function toLegacyContact(c: Omit<ContactRow, "phone">) {
+  return {
+    id: c.id,
+    email: c.email,
+    first_name: c.firstName,
+    status: c.status as string,
+    source: c.source,
+    consent: c.consent,
+    consent_text: c.consentText,
+    consent_at: msToIso(c.consentAt ?? undefined),
+    consent_ip: c.consentIp,
+    shopify_customer_id: c.shopifyCustomerId,
+    orders_count: c.ordersCount,
+    total_spent: c.totalSpent,
+    last_order_at: msToIso(c.lastOrderAt ?? undefined),
+    last_open_at: msToIso(c.lastOpenAt ?? undefined),
+    last_click_at: msToIso(c.lastClickAt ?? undefined),
+    tags: c.tags,
+    created_at: new Date(c.createdAt).toISOString(),
+    updated_at: new Date(c.updatedAt).toISOString(),
+  };
+}
+
+export async function getDashboardData() {
+  const now = Date.now();
+  const data = await convexQuery(api.contacts.dashboard, { now });
 
   // Serie de altas por día (30 días, huecos a 0)
   const series: { date: string; altas: number }[] = [];
@@ -88,41 +57,37 @@ export async function getDashboardData() {
     index.set(date, series.length);
     series.push({ date, altas: 0 });
   }
-  for (const row of signups.data ?? []) {
-    const i = index.get(row.created_at.slice(0, 10));
+  for (const createdAt of data.signupCreatedAts) {
+    const i = index.get(new Date(createdAt).toISOString().slice(0, 10));
     if (i !== undefined) series[i]!.altas += 1;
   }
 
-  const orderRows = orders.data ?? [];
-  const net = (o: { total_price: number | null; total_refunded: number }) =>
-    (o.total_price ?? 0) - (o.total_refunded ?? 0);
-  const revenueTotal = orderRows.reduce((sum, o) => sum + net(o), 0);
-  const revenueWithCode = orderRows
-    .filter((o) => o.discount_code)
+  const net = (o: { totalPrice: number | null; totalRefunded: number }) =>
+    (o.totalPrice ?? 0) - (o.totalRefunded ?? 0);
+  const revenueTotal = data.orders.reduce((sum, o) => sum + net(o), 0);
+  const revenueWithCode = data.orders
+    .filter((o) => o.discountCode)
     .reduce((sum, o) => sum + net(o), 0);
 
   return {
-    contacts: {
-      subscribed: subscribed.count ?? 0,
-      pending: pending.count ?? 0,
-      newLast7: new7.count ?? 0,
-    },
-    email: {
-      sent: sent.count ?? 0,
-      opened: opened.count ?? 0,
-      clicked: clicked.count ?? 0,
-    },
-    checkouts: {
-      abandoned: abandoned.count ?? 0,
-      recovered: recovered.count ?? 0,
-    },
+    contacts: data.contacts,
+    email: data.email,
+    checkouts: data.checkouts,
     revenue: {
       total: revenueTotal,
       withCode: revenueWithCode,
-      orders: orderRows.length,
+      orders: data.orders.length,
     },
     signupsSeries: series,
-    recentEvents: recentEvents.data ?? [],
+    recentEvents: data.recentEvents.map((event) => ({
+      id: event.id,
+      type: event.type,
+      payload: event.payload,
+      created_at: new Date(event.createdAt).toISOString(),
+      contacts: event.contact
+        ? { email: event.contact.email, first_name: event.contact.firstName }
+        : null,
+    })),
   };
 }
 
@@ -136,172 +101,168 @@ export async function listContacts(params: {
   alta_dias?: number;
   tag?: string;
 }) {
-  const supabase = await createClient();
   const page = Math.max(1, params.page ?? 1);
   const from = (page - 1) * CONTACTS_PER_PAGE;
 
-  let query = supabase
-    .from("contacts")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .range(from, from + CONTACTS_PER_PAGE - 1);
-
-  if (params.status) query = query.eq("status", params.status);
-
   // Facetas §16.2 (mismas semánticas que lib/crm/segments.ts, pero sin fijar
   // status: aquí se combinan con el filtro de estado que elija el admin)
-  if (params.tipo === "lead") query = query.eq("orders_count", 0);
-  if (params.tipo === "cliente") query = query.gte("orders_count", 1);
-  if (params.tipo === "repetidor") query = query.gte("orders_count", 2);
-  if (params.tipo === "vip") {
-    query = query.gte("total_spent", VIP_MIN_DEFAULT);
+  const facets: SegmentFacets = {};
+  if (
+    params.tipo === "lead" ||
+    params.tipo === "cliente" ||
+    params.tipo === "repetidor" ||
+    params.tipo === "vip"
+  ) {
+    facets.tipo = params.tipo;
   }
-  const activityIso = new Date(
-    Date.now() - ACTIVITY_DAYS * 86_400_000,
-  ).toISOString();
-  if (params.actividad === "activos") {
-    query = query.or(
-      `last_open_at.gte.${activityIso},last_click_at.gte.${activityIso}`,
-    );
+  if (params.actividad === "activos" || params.actividad === "dormidos") {
+    facets.actividad = params.actividad;
   }
-  if (params.actividad === "dormidos") {
-    query = query
-      .or(`last_open_at.is.null,last_open_at.lt.${activityIso}`)
-      .or(`last_click_at.is.null,last_click_at.lt.${activityIso}`);
-  }
-  if (params.fuente) query = query.eq("source", params.fuente);
+  if (params.fuente) facets.fuente = params.fuente;
   if (params.alta_dias && params.alta_dias > 0) {
-    query = query.gte(
-      "created_at",
-      new Date(Date.now() - params.alta_dias * 86_400_000).toISOString(),
-    );
+    facets.alta_dias = params.alta_dias;
   }
-  if (params.tag) query = query.contains("tags", [params.tag.toLowerCase()]);
+  if (params.tag) facets.tag = params.tag.toLowerCase();
+
+  const [rows, context] = await Promise.all([
+    convexQuery(api.contacts.list, {}),
+    buildFacetsContext(facets),
+  ]);
+
+  let filtered = rows;
+  if (params.status) {
+    filtered = filtered.filter((c) => c.status === params.status);
+  }
+  filtered = filtered.filter((c) =>
+    contactMatchesFacets(c as SegmentContactRow, context),
+  );
 
   if (params.q) {
-    // PostgREST usa comas como separador dentro de or(): sanear
+    // Herencia del interpolado de .or() de PostgREST (comas y paréntesis
+    // eran sintaxis): se sanea igual para que la búsqueda se comporte como antes
     const q = params.q
       .replaceAll(",", " ")
       .replaceAll("(", " ")
       .replaceAll(")", " ")
-      .trim();
-    if (q) query = query.or(`email.ilike.%${q}%,first_name.ilike.%${q}%`);
-  }
-
-  const { data, count, error } = await query;
-  if (error) throw error;
-  const contacts = data ?? [];
-
-  // Teléfonos de la página (viven en la ficha de cliente de Shopify, no en
-  // contacts): un lookup por los contactos vinculados, mapeado por contact.id.
-  const phones = new Map<string, string>();
-  const linked = contacts.filter((c) => c.shopify_customer_id);
-  if (linked.length > 0) {
-    const { data: customers } = await supabase
-      .from("customers")
-      .select("id, phone")
-      .in(
-        "id",
-        linked.map((c) => Number(c.shopify_customer_id)),
-      )
-      .not("phone", "is", null);
-    const byCustomer = new Map(
-      (customers ?? []).map((c) => [String(c.id), c.phone!]),
-    );
-    for (const contact of linked) {
-      const phone = byCustomer.get(contact.shopify_customer_id!);
-      if (phone) phones.set(contact.id, phone);
+      .trim()
+      .toLowerCase();
+    if (q) {
+      filtered = filtered.filter(
+        (c) =>
+          c.email.toLowerCase().includes(q) ||
+          (c.firstName ?? "").toLowerCase().includes(q),
+      );
     }
   }
 
+  // api.contacts.list ya llega ordenado por created_at desc
+  const pageRows = filtered.slice(from, from + CONTACTS_PER_PAGE);
+
+  // Teléfonos de la página (viven en la ficha de cliente de Shopify, no en
+  // contacts), mapeados por contact.id
+  const phones = new Map<string, string>();
+  for (const row of pageRows) {
+    if (row.phone) phones.set(row.id, row.phone);
+  }
+
   return {
-    contacts,
+    contacts: pageRows.map(toLegacyContact),
     phones,
-    total: count ?? 0,
+    total: filtered.length,
     page,
     perPage: CONTACTS_PER_PAGE,
   };
 }
 
 export async function getContactDetail(id: string) {
-  const supabase = await createClient();
-
-  const { data: contact } = await supabase
-    .from("contacts")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (!contact) return null;
-
-  const [events, codes, orders, sends, customer] = await Promise.all([
-    supabase
-      .from("events")
-      .select("*")
-      .eq("contact_id", id)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase
-      .from("discount_codes")
-      .select("*")
-      .eq("contact_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("orders")
-      .select("*")
-      .eq("contact_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("email_sends")
-      .select("*")
-      .eq("contact_id", id)
-      .order("created_at", { ascending: false })
-      .limit(50),
-    // Teléfono: vive en la ficha de cliente sincronizada de Shopify (lo dan
-    // al comprar), no en contacts.
-    contact.shopify_customer_id
-      ? supabase
-          .from("customers")
-          .select("phone")
-          .eq("id", Number(contact.shopify_customer_id))
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const detail = await convexQuery(api.contacts.detail, { id });
+  if (!detail) return null;
 
   return {
-    contact,
-    events: events.data ?? [],
-    codes: codes.data ?? [],
-    orders: orders.data ?? [],
-    sends: sends.data ?? [],
-    phone: customer.data?.phone ?? null,
+    contact: toLegacyContact(detail.contact),
+    events: detail.events.map((e) => ({
+      id: e.id,
+      contact_id: e.contactId,
+      type: e.type,
+      payload: e.payload,
+      created_at: new Date(e.createdAt).toISOString(),
+    })),
+    codes: detail.codes.map((c) => ({
+      id: c.id,
+      code: c.code,
+      percentage: c.percentage,
+      redeemed: c.redeemed,
+      expires_at: msToIso(c.expiresAt ?? undefined),
+      shopify_discount_id: c.shopifyDiscountId,
+      created_at: new Date(c.createdAt).toISOString(),
+    })),
+    orders: detail.orders.map((o) => ({
+      id: o.orderId,
+      created_at: new Date(o.createdAt).toISOString(),
+      total_price: o.totalPrice,
+      total_refunded: o.totalRefunded,
+      currency: o.currency,
+      discount_code: o.discountCode,
+      utm_source: o.utmSource,
+      utm_medium: o.utmMedium,
+      utm_campaign: o.utmCampaign,
+      landing_page: o.landingPage,
+      referrer: o.referrer,
+      first_utm_source: o.firstUtmSource,
+      first_utm_medium: o.firstUtmMedium,
+      first_utm_campaign: o.firstUtmCampaign,
+      first_landing_page: o.firstLandingPage,
+      first_referrer: o.firstReferrer,
+      gclid: o.gclid,
+      fbclid: o.fbclid,
+    })),
+    sends: detail.sends.map((s) => ({
+      id: s.id,
+      template: s.template,
+      subject: s.subject,
+      status: s.status,
+      sent_at: msToIso(s.sentAt ?? undefined),
+      opened_at: msToIso(s.openedAt ?? undefined),
+      clicked_at: msToIso(s.clickedAt ?? undefined),
+      created_at: new Date(s.createdAt).toISOString(),
+    })),
+    phone: detail.phone,
+  };
+}
+
+// Campaña en la forma legacy Tables<"campaigns">
+type CampaignRow = NonNullable<FunctionReturnType<typeof api.campaigns.get>>;
+
+function toLegacyCampaign(c: CampaignRow) {
+  return {
+    id: c.id,
+    name: c.name,
+    subject: c.subject,
+    preheader: c.preheader,
+    body_html: c.bodyHtml,
+    segment: c.segment,
+    status: c.status as string,
+    scheduled_at: msToIso(c.scheduledAt ?? undefined),
+    sent_at: msToIso(c.sentAt ?? undefined),
+    paused_at: msToIso(c.pausedAt ?? undefined),
+    created_at: new Date(c.createdAt).toISOString(),
   };
 }
 
 export async function listCampaigns() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("campaigns")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  const campaigns = await convexQuery(api.campaigns.list, {});
+  return campaigns.map(toLegacyCampaign);
 }
 
 export async function getCampaign(id: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  return data;
+  const campaign = await convexQuery(api.campaigns.get, { id });
+  return campaign ? toLegacyCampaign(campaign) : null;
 }
 
 // Recuento de la audiencia de un segmento (facetas §16.2; {} = todos los
 // suscritos). Se usa en la ficha de campaña y en el editor de secuencias.
 export async function getCampaignAudienceCount(facets: SegmentFacets = {}) {
-  const supabase = await createClient();
-  return countSegmentAudience(supabase, facets);
+  return countSegmentAudience(null, facets);
 }
 
 export type CampaignSendStats = {
@@ -317,174 +278,184 @@ export type CampaignSendStats = {
 export async function getCampaignSendStats(
   campaignId: string,
 ): Promise<CampaignSendStats> {
-  const supabase = await createClient();
-  const [recipients, opened, clicked] = await Promise.all([
-    supabase
-      .from("campaign_recipients")
-      .select("status")
-      .eq("campaign_id", campaignId)
-      .limit(10000),
-    supabase
-      .from("email_sends")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .not("opened_at", "is", null),
-    supabase
-      .from("email_sends")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .not("clicked_at", "is", null),
-  ]);
-
-  const rows = recipients.data ?? [];
-  const by = (status: string) => rows.filter((r) => r.status === status).length;
+  const stats = await convexQuery(api.campaigns.sendStats, { id: campaignId });
+  const by = (status: string) =>
+    stats.statuses.filter((s) => s === status).length;
   return {
-    total: rows.length,
+    total: stats.statuses.length,
     sent: by("sent"),
     inFlight: by("pending") + by("sending"),
     skipped: by("skipped"),
     failed: by("failed"),
-    opened: opened.count ?? 0,
-    clicked: clicked.count ?? 0,
+    opened: stats.opened,
+    clicked: stats.clicked,
+  };
+}
+
+// Paso en la forma legacy Tables<"automation_steps">
+type AutomationRow = FunctionReturnType<typeof api.automations.list>[number];
+
+function toLegacyStep(s: AutomationRow["steps"][number]) {
+  return {
+    id: s.id,
+    automation_id: s.automationId,
+    position: s.position,
+    delay_minutes: s.delayMinutes,
+    subject: s.subject,
+    preheader: s.preheader,
+    body_html: s.bodyHtml,
+    enabled: s.enabled,
+    created_at: new Date(s.createdAt).toISOString(),
+  };
+}
+
+function toLegacyAutomation(a: Omit<AutomationRow, "steps">) {
+  return {
+    id: a.id,
+    key: a.key,
+    name: a.name,
+    enabled: a.enabled,
+    trigger: a.trigger as string,
+    config: a.config,
+    created_at: new Date(a.createdAt).toISOString(),
   };
 }
 
 export async function listAutomations() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("automations")
-    .select("*, automation_steps(*)")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map((automation) => ({
-    ...automation,
-    automation_steps: [...automation.automation_steps].sort(
-      (a, b) => a.position - b.position,
-    ),
+  const automations = await convexQuery(api.automations.list, {});
+  return automations.map((automation) => ({
+    ...toLegacyAutomation(automation),
+    automation_steps: [...automation.steps]
+      .sort((a, b) => a.position - b.position)
+      .map(toLegacyStep),
   }));
 }
 
 export type StepStats = { sent: number; opened: number; clicked: number };
 
 export async function getAutomationDetail(id: string) {
-  const supabase = await createClient();
-  const { data: automation } = await supabase
-    .from("automations")
-    .select("*, automation_steps(*)")
-    .eq("id", id)
-    .maybeSingle();
-  if (!automation) return null;
+  const detail = await convexQuery(api.automations.detail, { id });
+  if (!detail) return null;
 
-  const [sends, enrollments] = await Promise.all([
-    supabase
-      .from("email_sends")
-      .select("automation_step_id, opened_at, clicked_at")
-      .eq("automation_id", id)
-      .limit(10000),
-    supabase
-      .from("automation_enrollments")
-      .select("status")
-      .eq("automation_id", id)
-      .limit(10000),
-  ]);
+  const steps = [...detail.steps]
+    .sort((a, b) => a.position - b.position)
+    .map(toLegacyStep);
 
   const statsByStep = new Map<string, StepStats>();
-  for (const send of sends.data ?? []) {
-    if (!send.automation_step_id) continue;
-    const entry = statsByStep.get(send.automation_step_id) ?? {
+  for (const send of detail.sends) {
+    if (!send.automationStepId) continue;
+    const entry = statsByStep.get(send.automationStepId) ?? {
       sent: 0,
       opened: 0,
       clicked: 0,
     };
     entry.sent += 1;
-    if (send.opened_at) entry.opened += 1;
-    if (send.clicked_at) entry.clicked += 1;
-    statsByStep.set(send.automation_step_id, entry);
+    if (send.openedAt) entry.opened += 1;
+    if (send.clickedAt) entry.clicked += 1;
+    statsByStep.set(send.automationStepId, entry);
   }
 
   const enrollmentCounts = { active: 0, completed: 0, canceled: 0 };
-  for (const enrollment of enrollments.data ?? []) {
-    if (enrollment.status === "active") enrollmentCounts.active += 1;
-    else if (enrollment.status === "completed") enrollmentCounts.completed += 1;
-    else if (enrollment.status === "canceled") enrollmentCounts.canceled += 1;
+  for (const status of detail.enrollmentStatuses) {
+    if (status === "active") enrollmentCounts.active += 1;
+    else if (status === "completed") enrollmentCounts.completed += 1;
+    else if (status === "canceled") enrollmentCounts.canceled += 1;
   }
 
   return {
-    automation,
-    steps: [...automation.automation_steps].sort(
-      (a, b) => a.position - b.position,
-    ),
+    automation: {
+      ...toLegacyAutomation(detail.automation),
+      automation_steps: steps,
+    },
+    steps,
     statsByStep,
     enrollmentCounts,
   };
 }
 
 export async function listPromotions() {
-  const supabase = await createClient();
-  const { data: promotions, error } = await supabase
-    .from("promotions")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const promotions = await convexQuery(api.promotions.list, {});
 
   // Atribución por código (orders llega con los webhooks de Fase 2).
   const stats = new Map<string, { revenue: number; orders: number }>();
-  const codes = (promotions ?? []).map((p) => p.code);
+  const codes = promotions.map((p) => p.code);
   if (codes.length > 0) {
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("discount_code, total_price")
-      .in("discount_code", codes)
-      .limit(5000);
-    for (const order of orders ?? []) {
-      if (!order.discount_code) continue;
-      const entry = stats.get(order.discount_code) ?? { revenue: 0, orders: 0 };
-      entry.revenue += order.total_price ?? 0;
+    const orders = await convexQuery(api.promotions.ordersByDiscountCodes, {
+      codes,
+    });
+    for (const order of orders) {
+      const entry = stats.get(order.discountCode) ?? { revenue: 0, orders: 0 };
+      entry.revenue += order.totalPrice ?? 0;
       entry.orders += 1;
-      stats.set(order.discount_code, entry);
+      stats.set(order.discountCode, entry);
     }
   }
 
-  return (promotions ?? []).map((promotion) => ({
-    ...promotion,
-    stats: stats.get(promotion.code) ?? { revenue: 0, orders: 0 },
+  // Forma legacy (snake_case, ISO, null) que esperan los componentes
+  return promotions.map((doc) => ({
+    id: doc._id as string,
+    type: doc.type,
+    name: doc.name,
+    code: doc.code,
+    percentage: doc.percentage,
+    affiliate_name: doc.affiliateName ?? null,
+    affiliate_commission_pct: doc.affiliateCommissionPct ?? null,
+    starts_at: new Date(doc.startsAt).toISOString(),
+    ends_at: msToIso(doc.endsAt),
+    active: doc.active,
+    announce: doc.announce,
+    shopify_discount_id: doc.shopifyDiscountId ?? null,
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+    stats: stats.get(doc.code) ?? { revenue: 0, orders: 0 },
   }));
 }
 
 export async function listSuppressions() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("suppressions")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(500);
-  if (error) throw error;
-  return data ?? [];
+  const suppressions = await convexQuery(api.contacts.listSuppressions, {});
+  return suppressions.map((s) => ({
+    email: s.email,
+    reason: s.reason as string,
+    created_at: new Date(s.createdAt).toISOString(),
+  }));
 }
 
 // ─────────────────────────── Blog ───────────────────────────
 
 export async function listBlogPosts() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(
-      "id, slug, title, status, published_at, updated_at, created_at, seo_title, seo_description",
-    )
-    .order("published_at", { ascending: false, nullsFirst: true })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  const posts = await convexQuery(api.blog.listAll, {});
+  return posts.map((doc) => ({
+    id: doc._id,
+    slug: doc.slug,
+    title: doc.title,
+    status: doc.status,
+    published_at: msToIso(doc.publishedAt),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+    created_at: new Date(doc.createdAt).toISOString(),
+    seo_title: doc.seoTitle ?? null,
+    seo_description: doc.seoDescription ?? null,
+  }));
 }
 
 export async function getBlogPost(id: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("blog_posts")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  return data;
+  const doc = await convexQuery(api.blog.get, { id });
+  if (!doc) return null;
+  return {
+    id: doc._id,
+    slug: doc.slug,
+    title: doc.title,
+    excerpt: doc.excerpt ?? null,
+    content_md: doc.contentMd,
+    cover_image_url: doc.coverImageUrl ?? null,
+    seo_title: doc.seoTitle ?? null,
+    seo_description: doc.seoDescription ?? null,
+    keywords: doc.keywords ?? null,
+    status: doc.status,
+    author: doc.author,
+    published_at: msToIso(doc.publishedAt),
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+  };
 }
 
 export const CARTS_PER_PAGE = 50;
@@ -499,9 +470,9 @@ const CART_STATUSES = [
 // /admin/carts: carritos (checkouts de Shopify + carritos de la web) con su
 // contacto, el estado de la secuencia de recuperación y los emails enviados
 // (email_sends.checkout_id). KPIs para la cabecera y counts por estado para
-// los filtros.
+// los filtros. La query devuelve el conjunto completo; filtro, orden,
+// paginación y KPIs se hacen aquí en memoria.
 export async function getCartsData(params: { estado?: string; page?: number }) {
-  const supabase = await createClient();
   const page = Math.max(1, params.page ?? 1);
   const from = (page - 1) * CARTS_PER_PAGE;
   const estado = (CART_STATUSES as readonly string[]).includes(
@@ -510,58 +481,63 @@ export async function getCartsData(params: { estado?: string; page?: number }) {
     ? params.estado
     : undefined;
 
-  // OJO: el select va en UNA línea — PostgREST rechaza saltos de línea (PGRST100)
-  let listQuery = supabase
-    .from("checkouts")
-    .select(
-      "id, origin, status, email, contact_id, line_items, total_price, currency, created_at, abandoned_at, last_event_at, recovery_sent_at, recovery_url, buyer_accepts_marketing, contacts(first_name), automation_enrollments(step, status, next_run_at), email_sends(id, subject, status, sent_at, opened_at, clicked_at)",
-      { count: "exact" },
-    )
-    .order("last_event_at", { ascending: false })
-    .range(from, from + CARTS_PER_PAGE - 1);
-  if (estado) listQuery = listQuery.eq("status", estado);
+  const rows = await convexQuery(api.carts.listForAdmin, {});
 
-  const countByStatus = (status: string) =>
-    supabase
-      .from("checkouts")
-      .select("id", { count: "exact", head: true })
-      .eq("status", status);
+  // KPIs sobre el conjunto completo (independientes del filtro activo)
+  const recoveredRows = rows.filter((r) => r.status === "recovered");
+  const kpis = {
+    abandoned: rows.filter((r) => r.status === "abandoned").length,
+    reachedCheckout: rows.filter((r) => r.status === "reached_checkout").length,
+    recovered: recoveredRows.length,
+    recoveredRevenue: recoveredRows.reduce(
+      (sum, row) => sum + (row.totalPrice ?? 0),
+      0,
+    ),
+    converted: rows.filter((r) => r.status === "converted").length,
+    contacted: rows.filter((r) => r.recoverySentAt !== null).length,
+  };
 
-  const [list, abandoned, reached, recoveredRows, converted, contacted] =
-    await Promise.all([
-      listQuery,
-      countByStatus("abandoned"),
-      countByStatus("reached_checkout"),
-      supabase
-        .from("checkouts")
-        .select("total_price")
-        .eq("status", "recovered"),
-      countByStatus("converted"),
-      supabase
-        .from("checkouts")
-        .select("id", { count: "exact", head: true })
-        .not("recovery_sent_at", "is", null),
-    ]);
-  if (list.error) throw list.error;
+  const filtered = (estado ? rows.filter((r) => r.status === estado) : rows)
+    .slice()
+    .sort((a, b) => (b.lastEventAt ?? 0) - (a.lastEventAt ?? 0));
 
-  const recoveredCount = (recoveredRows.data ?? []).length;
-  const recoveredRevenue = (recoveredRows.data ?? []).reduce(
-    (sum, row) => sum + (row.total_price ?? 0),
-    0,
-  );
+  const carts = filtered.slice(from, from + CARTS_PER_PAGE).map((r) => ({
+    id: r.id,
+    origin: r.origin as string,
+    status: r.status as string,
+    email: r.email,
+    contact_id: r.contactId,
+    line_items: r.lineItems,
+    total_price: r.totalPrice,
+    currency: r.currency,
+    created_at: new Date(r.createdAt).toISOString(),
+    abandoned_at: msToIso(r.abandonedAt ?? undefined),
+    last_event_at: msToIso(r.lastEventAt ?? undefined),
+    recovery_sent_at: msToIso(r.recoverySentAt ?? undefined),
+    recovery_url: r.recoveryUrl,
+    buyer_accepts_marketing: r.buyerAcceptsMarketing,
+    contacts:
+      r.contactId !== null ? { first_name: r.contactFirstName } : null,
+    automation_enrollments: r.enrollments.map((e) => ({
+      step: e.step,
+      status: e.status as string,
+      next_run_at: msToIso(e.nextRunAt ?? undefined),
+    })),
+    email_sends: r.sends.map((s) => ({
+      id: s.id,
+      subject: s.subject,
+      status: s.status as string,
+      sent_at: msToIso(s.sentAt ?? undefined),
+      opened_at: msToIso(s.openedAt ?? undefined),
+      clicked_at: msToIso(s.clickedAt ?? undefined),
+    })),
+  }));
 
   return {
-    carts: list.data ?? [],
-    total: list.count ?? 0,
+    carts,
+    total: filtered.length,
     page,
     perPage: CARTS_PER_PAGE,
-    kpis: {
-      abandoned: abandoned.count ?? 0,
-      reachedCheckout: reached.count ?? 0,
-      recovered: recoveredCount,
-      recoveredRevenue,
-      converted: converted.count ?? 0,
-      contacted: contacted.count ?? 0,
-    },
+    kpis,
   };
 }

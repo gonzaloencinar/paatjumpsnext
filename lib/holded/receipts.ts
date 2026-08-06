@@ -1,6 +1,6 @@
 // Tickets de venta (sales receipts) en Holded a partir de pedidos de Shopify.
 //
-// El desglose fiscal NO sale de Supabase (orders solo guarda total_tax
+// El desglose fiscal NO sale de la base de datos (orders solo guarda el IVA
 // agregado): cada pedido se relee en vivo de la Admin API de Shopify con
 // taxLines por línea + discountAllocations, y se traduce a líneas de Holded
 // con precio sin IVA + tax key (s_iva_21, s_iva_export…). Tras crear el
@@ -8,10 +8,12 @@
 // cuadran (±0,02 €) el borrador se elimina y el pedido queda en error para
 // revisión manual.
 //
-// Estado por pedido en public.order_invoices (claim previo a crear, así el
-// cron y el backfill son idempotentes y no duplican tickets).
+// Estado por pedido en order_invoices (Convex, convex/billing.ts; claim
+// previo a crear, así el cron y el backfill son idempotentes y no duplican
+// tickets).
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { hasHoldedKey, holdedFetch } from "./client";
 
 // Los pedidos anteriores a esta fecha los emite el backfill (sin email);
@@ -478,15 +480,21 @@ type OrderRow = {
   processed_at: string | null;
 };
 
-function supa() {
-  return createAdminClient();
-}
+// Patch de la fila de estado (convención de convex/billing.ts: clave ausente
+// = no tocar, null = borrar; updatedAt lo sella la mutation)
+type InvoicePatch = {
+  status?: string;
+  error?: string | null;
+  holdedId?: string;
+  documentNumber?: string | null;
+  total?: number;
+  tax?: number;
+  emailedAt?: number;
+  attempts?: number;
+};
 
-async function saveInvoiceRow(orderId: number, patch: Record<string, unknown>) {
-  await supa()
-    .from("order_invoices")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("order_id", orderId);
+async function saveInvoiceRow(orderId: number, patch: InvoicePatch) {
+  await convexMutation(api.billing.updateInvoice, { orderId, ...patch });
 }
 
 // Emite el ticket de un pedido: borrador → verificación de totales →
@@ -496,7 +504,6 @@ export async function issueReceiptForOrder(
   opts: { sendEmail: boolean },
 ): Promise<IssueResult> {
   const orderId = row.id;
-  const db = supa();
 
   // Guardas: solo pedidos cobrados, sin devoluciones, reales
   let skipReason: string | null = null;
@@ -508,18 +515,14 @@ export async function issueReceiptForOrder(
   else if ((row.total_price ?? 0) <= 0) skipReason = "total 0";
 
   // Reclamar la fila (idempotencia): si ya existe y está creada/omitida, fuera
-  const { data: existing } = await db
-    .from("order_invoices")
-    .select("status, holded_id, attempts")
-    .eq("order_id", orderId)
-    .maybeSingle();
+  const existing = await convexQuery(api.billing.invoiceByOrderId, { orderId });
   if (existing?.status === "created" || existing?.status === "skipped") {
     return { orderId, status: "skipped", detail: `ya ${existing.status}` };
   }
   if (existing && existing.attempts >= MAX_ATTEMPTS) {
     return { orderId, status: "skipped", detail: "máximo de intentos" };
   }
-  if (existing?.holded_id) {
+  if (existing?.holdedId) {
     return {
       orderId,
       status: "skipped",
@@ -527,10 +530,9 @@ export async function issueReceiptForOrder(
     };
   }
   if (!existing) {
-    await db.from("order_invoices").insert({
-      order_id: orderId,
-      order_name: row.name,
-      status: "pending",
+    await convexMutation(api.billing.insertPendingInvoice, {
+      orderId,
+      ...(row.name !== null ? { orderName: row.name } : {}),
     });
   }
 
@@ -635,12 +637,12 @@ export async function issueReceiptForOrder(
 
     await saveInvoiceRow(orderId, {
       status: "created",
-      holded_id: created.id,
-      document_number: approved.document_number,
+      holdedId: created.id,
+      documentNumber: approved.document_number,
       total,
       tax,
       error: null,
-      ...(emailed ? { emailed_at: new Date().toISOString() } : {}),
+      ...(emailed ? { emailedAt: Date.now() } : {}),
     });
     return {
       orderId,
@@ -651,15 +653,11 @@ export async function issueReceiptForOrder(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await supa()
-      .from("order_invoices")
-      .update({
-        status: "error",
-        error: message.slice(0, 500),
-        attempts: (existing?.attempts ?? 0) + 1,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("order_id", orderId);
+    await saveInvoiceRow(orderId, {
+      status: "error",
+      error: message.slice(0, 500),
+      attempts: (existing?.attempts ?? 0) + 1,
+    });
     return {
       orderId,
       orderName: row.name ?? undefined,
@@ -669,46 +667,34 @@ export async function issueReceiptForOrder(
   }
 }
 
-// Pedidos cobrados sin ticket todavía, en un rango de fechas.
+// Pedidos cobrados sin ticket todavía, en un rango de fechas ("YYYY-MM-DD",
+// interpretadas en UTC como hacía Postgres con el literal de fecha). El
+// filtro paid/cancelado/rango/ya-facturado vive en convex/billing.ts; aquí
+// solo se traduce a la forma legacy (snake_case + ISO).
 async function pendingOrders(range: {
   before?: string;
   since?: string;
   limit: number;
 }): Promise<OrderRow[]> {
-  const db = supa();
-  let query = db
-    .from("orders")
-    .select(
-      "id, name, email, financial_status, cancelled_at, test, total_refunded, total_price, processed_at",
-    )
-    .eq("financial_status", "paid")
-    .is("cancelled_at", null)
-    .order("processed_at", { ascending: true });
-  if (range.before) query = query.lt("processed_at", range.before);
-  if (range.since) query = query.gte("processed_at", range.since);
-  const { data, error } = await query.limit(200);
-  if (error) throw error;
-  const rows = (data ?? []).filter((o) => !o.test);
-  if (rows.length === 0) return [];
-
-  const { data: invoiced } = await db
-    .from("order_invoices")
-    .select("order_id, status, attempts")
-    .in(
-      "order_id",
-      rows.map((o) => o.id),
-    );
-  const done = new Set(
-    (invoiced ?? [])
-      .filter(
-        (i) =>
-          i.status === "created" ||
-          i.status === "skipped" ||
-          i.attempts >= MAX_ATTEMPTS,
-      )
-      .map((i) => i.order_id),
-  );
-  return rows.filter((o) => !done.has(o.id)).slice(0, range.limit);
+  const rows = await convexQuery(api.billing.invoiceCandidates, {
+    ...(range.since ? { sinceMs: Date.parse(range.since) } : {}),
+    ...(range.before ? { beforeMs: Date.parse(range.before) } : {}),
+    limit: range.limit,
+    maxAttempts: MAX_ATTEMPTS,
+  });
+  return rows.map((o) => ({
+    id: o.orderId,
+    name: o.name,
+    email: o.email,
+    financial_status: o.financialStatus,
+    cancelled_at:
+      o.cancelledAt === null ? null : new Date(o.cancelledAt).toISOString(),
+    test: o.test,
+    total_refunded: o.totalRefunded,
+    total_price: o.totalPrice,
+    processed_at:
+      o.processedAt === null ? null : new Date(o.processedAt).toISOString(),
+  }));
 }
 
 // Para el cron: factura (y envía por email) los pedidos nuevos.

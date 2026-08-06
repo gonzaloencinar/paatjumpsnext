@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { transportSend } from "./provider";
 import { unsubscribeUrl } from "./tokens";
 
@@ -16,35 +17,25 @@ type CrmEmail = {
   idempotencyKey?: string;
 };
 
-// TODA salida de email pasa por aquí (plan §5/§11): consulta suppressions
-// antes de enviar, registra en email_sends, y pone las cabeceras de baja
-// RFC 8058. Los blasts de campañas (Fase 3) reutilizarán esta función.
+// TODA salida de email pasa por aquí (plan §5/§11): el gate de suppressions
+// y el registro 'queued' en email_sends van en una sola mutation Convex
+// (transaccional), luego se envía por Resend con las cabeceras de baja
+// RFC 8058 y se sella sent/failed. Los engines (campañas/automatizaciones)
+// reutilizan esta función con su firma intacta.
 export async function sendCrmEmail(input: CrmEmail) {
-  const supabase = createAdminClient();
   const email = input.to.trim().toLowerCase();
 
-  const { data: suppressed } = await supabase
-    .from("suppressions")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
-  if (suppressed) return { skipped: "suppressed" as const };
-
-  const { data: send, error: insertError } = await supabase
-    .from("email_sends")
-    .insert({
-      contact_id: input.contactId ?? null,
-      campaign_id: input.campaignId ?? null,
-      automation_id: input.automationId ?? null,
-      automation_step_id: input.automationStepId ?? null,
-      checkout_id: input.checkoutId ?? null,
-      template: input.template,
-      subject: input.subject,
-      status: "queued",
-    })
-    .select("id")
-    .single();
-  if (insertError) throw insertError;
+  const queued = await convexMutation(api.emails.createQueued, {
+    email,
+    template: input.template,
+    subject: input.subject,
+    contactId: input.contactId ?? null,
+    campaignId: input.campaignId ?? null,
+    automationId: input.automationId ?? null,
+    automationStepId: input.automationStepId ?? null,
+    checkoutId: input.checkoutId ?? null,
+  });
+  if (queued.status === "suppressed") return { skipped: "suppressed" as const };
 
   const unsubscribe = unsubscribeUrl(email);
 
@@ -53,36 +44,22 @@ export async function sendCrmEmail(input: CrmEmail) {
       to: email,
       subject: input.subject,
       react: input.react,
-      idempotencyKey: input.idempotencyKey ?? send.id,
+      idempotencyKey: input.idempotencyKey ?? queued.id,
       headers: {
         "List-Unsubscribe": `<${unsubscribe}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       },
     });
 
-    await supabase
-      .from("email_sends")
-      .update({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        provider_message_id: providerMessageId,
-      })
-      .eq("id", send.id);
+    // markSent registra también el evento email_sent del contacto vinculado
+    await convexMutation(api.emails.markSent, {
+      id: queued.id,
+      providerMessageId,
+    });
 
-    if (input.contactId) {
-      await supabase.from("events").insert({
-        contact_id: input.contactId,
-        type: "email_sent",
-        payload: { template: input.template, email_send_id: send.id },
-      });
-    }
-
-    return { sent: true as const, emailSendId: send.id };
+    return { sent: true as const, emailSendId: queued.id };
   } catch (error) {
-    await supabase
-      .from("email_sends")
-      .update({ status: "failed" })
-      .eq("id", send.id);
+    await convexMutation(api.emails.markFailed, { id: queued.id });
     throw error;
   }
 }

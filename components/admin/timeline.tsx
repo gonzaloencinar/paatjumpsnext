@@ -10,7 +10,7 @@ import {
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
-import type { Json } from "@/lib/supabase/types";
+import type { Json } from "@/lib/crm/db-types";
 import {
   CONTACT_STATUS,
   eventLabel,
@@ -57,7 +57,8 @@ export function Timeline({
   events,
 }: {
   events: {
-    id: number;
+    // number (bigint legacy) o string (_id de Convex): solo se usa como key
+    id: number | string;
     type: string;
     payload: Json | null;
     created_at: string;

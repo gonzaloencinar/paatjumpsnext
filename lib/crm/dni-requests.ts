@@ -1,4 +1,6 @@
 import { createElement } from "react";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { transportSend } from "@/lib/email/provider";
 import {
   DniAlertEmail,
@@ -7,7 +9,6 @@ import {
 } from "@/lib/email/templates/dni-request";
 import { signEmailToken, verifyEmailToken } from "@/lib/email/tokens";
 import { getOrderShippingDetails } from "@/lib/shopify/admin";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { CRM } from "./config";
 
 // Petición de DNI/NIE post-pedido (tabla order_dni_requests): cuando entra un
@@ -72,7 +73,8 @@ export function sanitizeDniValue(
 }
 
 // Llamado desde el webhook orders/create: crea la petición si el destino la
-// necesita. Idempotente (upsert ignorando duplicados); el cron envía después.
+// necesita. Idempotente (la mutation ignora duplicados por orderId, como el
+// upsert legacy con ignoreDuplicates); el cron envía después.
 export async function ensureDniRequest(params: {
   orderId: number;
   orderName: string | null;
@@ -82,16 +84,12 @@ export async function ensureDniRequest(params: {
 }): Promise<void> {
   const locale = dniRequestLocale(params.countryCode, params.zip);
   if (!locale || !params.email) return;
-  const supabase = createAdminClient();
-  await supabase.from("order_dni_requests").upsert(
-    {
-      order_id: params.orderId,
-      order_name: params.orderName,
-      email: params.email,
-      locale,
-    },
-    { onConflict: "order_id", ignoreDuplicates: true },
-  );
+  await convexMutation(api.dni.ensureRequest, {
+    orderId: params.orderId,
+    ...(params.orderName !== null ? { orderName: params.orderName } : {}),
+    email: params.email,
+    locale,
+  });
 }
 
 // Tick del cron: primer email → recordatorio (24 h) → aviso interno (48 h).
@@ -101,25 +99,19 @@ export async function processDniRequests(): Promise<{
   reminded: number;
   alerted: number;
 }> {
-  const supabase = createAdminClient();
-  const { data: rows } = await supabase
-    .from("order_dni_requests")
-    .select("*")
-    .is("submitted_at", null)
-    .is("alerted_at", null)
-    .limit(100);
+  const rows = await convexQuery(api.dni.pendingRequests, { limit: 100 });
 
   let sent = 0;
   let reminded = 0;
   let alerted = 0;
   const now = Date.now();
 
-  for (const row of rows ?? []) {
-    const locale = (row.locale === "en" ? "en" : "es") as DniLocale;
-    const orderName = row.order_name ?? `#${row.order_id}`;
-    const formUrl = dniFormUrl(row.order_id);
+  for (const row of rows) {
+    const locale = row.locale;
+    const orderName = row.orderName ?? `#${row.orderId}`;
+    const formUrl = dniFormUrl(row.orderId);
     try {
-      if (!row.first_sent_at) {
+      if (!row.firstSentAt) {
         await transportSend({
           to: row.email,
           subject: dniRequestSubject(locale, orderName, false),
@@ -129,16 +121,16 @@ export async function processDniRequests(): Promise<{
             formUrl,
             reminder: false,
           }),
-          idempotencyKey: `dni-first-${row.order_id}`,
+          idempotencyKey: `dni-first-${row.orderId}`,
         });
-        await supabase
-          .from("order_dni_requests")
-          .update({ first_sent_at: new Date().toISOString() })
-          .eq("order_id", row.order_id);
+        await convexMutation(api.dni.markSent, {
+          orderId: row.orderId,
+          mark: "first",
+        });
         sent += 1;
       } else if (
-        !row.reminder_sent_at &&
-        now - Date.parse(row.first_sent_at) >= REMINDER_AFTER_MS
+        !row.reminderSentAt &&
+        now - row.firstSentAt >= REMINDER_AFTER_MS
       ) {
         await transportSend({
           to: row.email,
@@ -149,21 +141,21 @@ export async function processDniRequests(): Promise<{
             formUrl,
             reminder: true,
           }),
-          idempotencyKey: `dni-reminder-${row.order_id}`,
+          idempotencyKey: `dni-reminder-${row.orderId}`,
         });
-        await supabase
-          .from("order_dni_requests")
-          .update({ reminder_sent_at: new Date().toISOString() })
-          .eq("order_id", row.order_id);
+        await convexMutation(api.dni.markSent, {
+          orderId: row.orderId,
+          mark: "reminder",
+        });
         reminded += 1;
       } else if (
-        row.reminder_sent_at &&
-        now - Date.parse(row.first_sent_at) >= ALERT_AFTER_MS
+        row.reminderSentAt &&
+        now - row.firstSentAt >= ALERT_AFTER_MS
       ) {
         // Teléfono del cliente para el aviso (best effort)
         let phone: string | null = null;
         try {
-          const details = await getOrderShippingDetails(row.order_id);
+          const details = await getOrderShippingDetails(row.orderId);
           phone = details?.shippingAddress?.phone ?? null;
         } catch {
           // sin teléfono el aviso sale igual
@@ -178,17 +170,17 @@ export async function processDniRequests(): Promise<{
             formUrl,
             adminUrl: `${CRM.baseUrl}/admin/orders?q=${encodeURIComponent(orderName)}`,
           }),
-          idempotencyKey: `dni-alert-${row.order_id}`,
+          idempotencyKey: `dni-alert-${row.orderId}`,
         });
-        await supabase
-          .from("order_dni_requests")
-          .update({ alerted_at: new Date().toISOString() })
-          .eq("order_id", row.order_id);
+        await convexMutation(api.dni.markSent, {
+          orderId: row.orderId,
+          mark: "alerted",
+        });
         alerted += 1;
       }
     } catch (error) {
       // Un fallo de envío no bloquea el resto; se reintenta al siguiente tick
-      console.error(`[dni-requests] pedido ${row.order_id}`, error);
+      console.error(`[dni-requests] pedido ${row.orderId}`, error);
     }
   }
 
@@ -209,23 +201,18 @@ export async function getDniRequestByToken(
 ): Promise<DniRequestView | null> {
   const orderId = verifyDniFormToken(token);
   if (orderId === null) return null;
-  const supabase = createAdminClient();
-  const { data: row } = await supabase
-    .from("order_dni_requests")
-    .select("order_id, order_name, locale, submitted_at")
-    .eq("order_id", orderId)
-    .maybeSingle();
+  const row = await convexQuery(api.dni.requestByOrderId, { orderId });
   if (!row) return null;
   return {
-    orderId: row.order_id,
-    orderName: row.order_name ?? `#${row.order_id}`,
-    locale: (row.locale === "en" ? "en" : "es") as DniLocale,
-    submitted: row.submitted_at !== null,
+    orderId: row.orderId,
+    orderName: row.orderName ?? `#${row.orderId}`,
+    locale: row.locale,
+    submitted: row.submittedAt !== null,
   };
 }
 
 // Envío del formulario (token verificado dentro). Devuelve false si el token
-// o el DNI no son válidos.
+// o el DNI no son válidos (o si falla la escritura, como el error legacy).
 export async function submitDniForm(
   token: string,
   rawDni: string,
@@ -233,35 +220,34 @@ export async function submitDniForm(
   const orderId = verifyDniFormToken(token);
   const dni = sanitizeDniValue(rawDni);
   if (orderId === null || !dni) return false;
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("order_dni_requests")
-    .update({ dni, submitted_at: new Date().toISOString() })
-    .eq("order_id", orderId);
-  return !error;
+  try {
+    await convexMutation(api.dni.submitDni, {
+      orderId,
+      dni,
+      onlyIfUnsubmitted: false,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // DNI ya recibido de un pedido (para el borrador de envío del CRM) o null
 export async function getOrderDni(orderId: number): Promise<string | null> {
-  const supabase = createAdminClient();
-  const { data: row } = await supabase
-    .from("order_dni_requests")
-    .select("dni, submitted_at")
-    .eq("order_id", orderId)
-    .maybeSingle();
-  return row?.submitted_at ? (row.dni ?? null) : null;
+  const row = await convexQuery(api.dni.requestByOrderId, { orderId });
+  return row?.submittedAt ? (row.dni ?? null) : null;
 }
 
 // El admin resolvió el DNI a mano (input del selector de envío, p. ej. tras
-// llamar al cliente): se guarda para que paren recordatorios/avisos.
+// llamar al cliente): se guarda para que paren recordatorios/avisos (sin
+// pisar un DNI que el cliente ya hubiera enviado).
 export async function recordManualDni(
   orderId: number,
   dni: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
-  await supabase
-    .from("order_dni_requests")
-    .update({ dni, submitted_at: new Date().toISOString() })
-    .eq("order_id", orderId)
-    .is("submitted_at", null);
+  await convexMutation(api.dni.submitDni, {
+    orderId,
+    dni,
+    onlyIfUnsubmitted: true,
+  });
 }

@@ -11,7 +11,7 @@ import {
   updatePromotion,
   type PromotionActionState,
 } from "@/lib/crm/promotion-actions";
-import type { Tables } from "@/lib/supabase/types";
+import type { Tables } from "@/lib/crm/db-types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

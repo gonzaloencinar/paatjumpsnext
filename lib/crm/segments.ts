@@ -1,11 +1,23 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Json } from "@/lib/supabase/types";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 
 // Segmentación por facetas cerradas (plan §16.2): cada faceta responde a una
-// pregunta de negocio y compila a filtros PostgREST sobre `contacts` (campos
-// derivados mantenidos por los webhooks). Todas se combinan con AND. La lista
-// de supresiones no se filtra aquí: los suprimidos ya no están `subscribed`
-// (y sendCrmEmail re-chequea suppressions en cada envío).
+// pregunta de negocio sobre `contacts` (campos derivados mantenidos por los
+// webhooks). Todas se combinan con AND. Los datos viven en Convex: la
+// audiencia se calcula en memoria sobre los suscritos (tabla pequeña) y el
+// snapshot de campaign_recipients lo hace la mutation transaccional
+// api.campaigns.addRecipients (unicidad por campaña+contacto con el índice
+// by_campaign_and_contact). La lista de supresiones no se filtra aquí: los
+// suprimidos ya no están `subscribed` (y sendCrmEmail re-chequea
+// suppressions en cada envío).
+
+type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type SegmentFacets = {
   tipo?: "lead" | "cliente" | "repetidor" | "vip";
@@ -18,24 +30,26 @@ export type SegmentFacets = {
   ids?: string[]; // selección manual desde /admin/contacts (bulk email)
 };
 
-// Tope compartido con applySegment: por encima habría que trocear el .in()
+// Tope compartido con la selección manual: por encima habría que trocear
 export const MAX_MANUAL_IDS = 500;
 
+// Ids válidos: uuid legacy (campañas antiguas con segment.ids) o id de
+// Convex (string opaco alfanumérico, el formato actual)
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CONVEX_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
 export function sanitizeContactIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [
     ...new Set(
       value.filter(
-        (id): id is string => typeof id === "string" && UUID_RE.test(id),
+        (id): id is string =>
+          typeof id === "string" && (UUID_RE.test(id) || CONVEX_ID_RE.test(id)),
       ),
     ),
   ].slice(0, MAX_MANUAL_IDS);
 }
-
-type Client = SupabaseClient<Database>;
 
 export const VIP_MIN_DEFAULT = 100;
 export const ACTIVITY_DAYS = 90;
@@ -43,7 +57,7 @@ export const ACTIVITY_DAYS = 90;
 const TIPOS = new Set(["lead", "cliente", "repetidor", "vip"]);
 const ACTIVIDADES = new Set(["activos", "dormidos"]);
 
-// jsonb de campaigns.segment → facetas saneadas. El formato legacy
+// json de campaigns.segment → facetas saneadas. El formato legacy
 // ({status:"subscribed"}) y cualquier basura quedan en {} = todos los suscritos.
 export function parseFacets(segment: Json | null | undefined): SegmentFacets {
   if (!segment || typeof segment !== "object" || Array.isArray(segment)) {
@@ -110,151 +124,137 @@ export function describeFacets(facets: SegmentFacets) {
   return parts.length > 0 ? parts.join(" · ") : "todos los suscritos";
 }
 
+// Fila mínima sobre la que se evalúan las facetas (forma camelCase de
+// api.contacts.list)
+export type SegmentContactRow = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  status: string;
+  source: string | null;
+  tags: string[];
+  ordersCount: number;
+  totalSpent: number;
+  createdAt: number;
+  lastOpenAt: number | null;
+  lastClickAt: number | null;
+};
+
 type SegmentContext = {
   facets: SegmentFacets;
   // ids de contactos que compraron con el código (null = faceta inactiva)
-  codigoIds: string[] | null;
+  codigoIds: Set<string> | null;
+  now: number;
 };
 
-export async function buildSegmentContext(
-  client: Client,
+async function buildSegmentContext(
   facets: SegmentFacets,
 ): Promise<SegmentContext> {
-  let codigoIds: string[] | null = null;
+  let codigoIds: Set<string> | null = null;
   if (facets.codigo) {
-    const { data } = await client
-      .from("orders")
-      .select("contact_id")
-      .eq("discount_code", facets.codigo)
-      .not("contact_id", "is", null)
-      .limit(10000);
-    codigoIds = [
-      ...new Set(
-        (data ?? [])
-          .map((order) => order.contact_id)
-          .filter((v): v is string => v !== null),
-      ),
-    ];
+    const ids = await convexQuery(api.contacts.contactIdsByDiscountCode, {
+      code: facets.codigo,
+    });
+    codigoIds = new Set(ids);
   }
-  return { facets, codigoIds };
+  return { facets, codigoIds, now: Date.now() };
 }
 
-const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
-
-// Aplica las facetas a un query builder de `contacts` ya creado (select/count)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applySegment<Q extends { eq: any }>(
-  query: Q,
+// ¿El contacto cae dentro de las facetas? (sin mirar status: el status lo
+// fija cada llamante — subscribed en segmentos, el filtro del admin en
+// /admin/contacts). Misma semántica que el applySegment legacy.
+export function contactMatchesFacets(
+  contact: SegmentContactRow,
   context: SegmentContext,
-): Q {
-  const { facets, codigoIds } = context;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q: any = query.eq("status", "subscribed");
+): boolean {
+  const { facets, codigoIds, now } = context;
 
-  if (facets.tipo === "lead") q = q.eq("orders_count", 0);
-  if (facets.tipo === "cliente") q = q.gte("orders_count", 1);
-  if (facets.tipo === "repetidor") q = q.gte("orders_count", 2);
-  if (facets.tipo === "vip") {
-    q = q.gte("total_spent", facets.vip_min ?? VIP_MIN_DEFAULT);
+  if (facets.tipo === "lead" && contact.ordersCount !== 0) return false;
+  if (facets.tipo === "cliente" && contact.ordersCount < 1) return false;
+  if (facets.tipo === "repetidor" && contact.ordersCount < 2) return false;
+  if (
+    facets.tipo === "vip" &&
+    contact.totalSpent < (facets.vip_min ?? VIP_MIN_DEFAULT)
+  ) {
+    return false;
   }
 
-  const activityIso = new Date(
-    Date.now() - ACTIVITY_DAYS * 86_400_000,
-  ).toISOString();
-  if (facets.actividad === "activos") {
-    q = q.or(
-      `last_open_at.gte.${activityIso},last_click_at.gte.${activityIso}`,
-    );
-  }
-  if (facets.actividad === "dormidos") {
-    q = q
-      .or(`last_open_at.is.null,last_open_at.lt.${activityIso}`)
-      .or(`last_click_at.is.null,last_click_at.lt.${activityIso}`);
-  }
+  const activitySince = now - ACTIVITY_DAYS * 86_400_000;
+  const opened = contact.lastOpenAt !== null && contact.lastOpenAt >= activitySince;
+  const clicked =
+    contact.lastClickAt !== null && contact.lastClickAt >= activitySince;
+  if (facets.actividad === "activos" && !opened && !clicked) return false;
+  if (facets.actividad === "dormidos" && (opened || clicked)) return false;
 
-  if (facets.fuente) q = q.eq("source", facets.fuente);
-  if (facets.alta_dias) {
-    q = q.gte(
-      "created_at",
-      new Date(Date.now() - facets.alta_dias * 86_400_000).toISOString(),
-    );
+  if (facets.fuente && contact.source !== facets.fuente) return false;
+  if (
+    facets.alta_dias &&
+    contact.createdAt < now - facets.alta_dias * 86_400_000
+  ) {
+    return false;
   }
-  if (facets.tag) q = q.contains("tags", [facets.tag]);
+  if (facets.tag && !contact.tags.includes(facets.tag)) return false;
 
-  // Selección manual: sigue pasando por status=subscribed (arriba), así una
-  // baja posterior a la selección queda fuera igualmente.
+  // Selección manual: sigue pasando por status=subscribed (el llamante), así
+  // una baja posterior a la selección queda fuera igualmente.
   if (facets.ids && facets.ids.length > 0) {
-    q = q.in("id", facets.ids.slice(0, MAX_MANUAL_IDS));
+    if (!facets.ids.slice(0, MAX_MANUAL_IDS).includes(contact.id)) {
+      return false;
+    }
   }
 
-  if (codigoIds) {
-    // Límite defensivo para no reventar la URL de PostgREST; con más de 500
-    // compradores del mismo código ya tocará mover esto a una RPC
-    q =
-      codigoIds.length > 0
-        ? q.in("id", codigoIds.slice(0, 500))
-        : q.eq("id", EMPTY_UUID);
-  }
+  if (codigoIds && !codigoIds.has(contact.id)) return false;
 
-  return q as Q;
+  return true;
 }
 
+// Contexto de facetas para /admin/contacts (sin fijar status)
+export async function buildFacetsContext(facets: SegmentFacets) {
+  return buildSegmentContext(facets);
+}
+
+// Audiencia del segmento: suscritos que cumplen las facetas
+async function getSegmentAudience(facets: SegmentFacets) {
+  const [contacts, context] = await Promise.all([
+    convexQuery(api.contacts.list, {}),
+    buildSegmentContext(facets),
+  ]);
+  return contacts.filter(
+    (contact) =>
+      contact.status === "subscribed" &&
+      contactMatchesFacets(contact, context),
+  );
+}
+
+// El primer parámetro era el cliente Supabase; se conserva (ignorado) para
+// no romper a los llamantes aún no portados (lib/crm/campaign-engine.ts).
 export async function countSegmentAudience(
-  client: Client,
+  _client: unknown,
   facets: SegmentFacets,
 ) {
-  const context = await buildSegmentContext(client, facets);
-  const { count, error } = await applySegment(
-    client.from("contacts").select("id", { count: "exact", head: true }),
-    context,
-  );
-  if (error) throw error;
-  return count ?? 0;
+  return (await getSegmentAudience(facets)).length;
 }
 
 // Congela la audiencia del segmento en campaign_recipients (snapshot §16.3).
-// Idempotente: los ya presentes se ignoran. Devuelve los insertados nuevos.
+// Idempotente: los ya presentes se ignoran (mutation transaccional con el
+// índice by_campaign_and_contact). Devuelve los insertados nuevos.
 export async function materializeCampaignAudience(
-  client: Client,
+  _client: unknown,
   campaignId: string,
   facets: SegmentFacets,
 ) {
-  const context = await buildSegmentContext(client, facets);
-  const pageSize = 1000;
-  let from = 0;
+  const audience = await getSegmentAudience(facets);
+  const chunkSize = 500;
   let inserted = 0;
-
-  for (;;) {
-    const { data, error } = await applySegment(
-      client
-        .from("contacts")
-        .select("id, email, first_name")
-        .order("id")
-        .range(from, from + pageSize - 1),
-      context,
-    );
-    if (error) throw error;
-    const rows = data ?? [];
-    if (rows.length === 0) break;
-
-    const { data: added, error: insertError } = await client
-      .from("campaign_recipients")
-      .upsert(
-        rows.map((contact) => ({
-          campaign_id: campaignId,
-          contact_id: contact.id,
-          email: contact.email,
-          first_name: contact.first_name,
-        })),
-        { ignoreDuplicates: true },
-      )
-      .select("id");
-    if (insertError) throw insertError;
-    inserted += added?.length ?? 0;
-
-    if (rows.length < pageSize) break;
-    from += pageSize;
+  for (let i = 0; i < audience.length; i += chunkSize) {
+    inserted += await convexMutation(api.campaigns.addRecipients, {
+      id: campaignId,
+      rows: audience.slice(i, i + chunkSize).map((contact) => ({
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+      })),
+    });
   }
-
   return inserted;
 }

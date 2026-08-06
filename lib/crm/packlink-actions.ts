@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { FunctionReturnType } from "convex/server";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { getOrderShippingDetails } from "@/lib/shopify/admin";
-import type { Json } from "@/lib/supabase/types";
 import { requireAdmin } from "./actions";
 import {
   compareQuotes,
@@ -45,6 +47,7 @@ import {
 import { getOrderDni, recordManualDni } from "./dni-requests";
 import {
   pushPacklinkFulfillments,
+  storeGeneiLabel,
   syncGeneiShipments,
   syncPacklinkShipments,
 } from "./packlink-sync";
@@ -54,6 +57,8 @@ import {
 // COMPRA de la etiqueta y descarga. Cada cotización compara SIEMPRE Packlink
 // PRO y Genei a la vez; el borrador se crea en el proveedor de la opción
 // elegida (por defecto, la más barata domicilio-domicilio).
+// Los datos viven en Convex (convex/shipments.ts); requireAdmin() sigue
+// validando la sesión (Convex Auth + allowlist admin_users).
 
 const ORDERS_PATH = "/admin/orders";
 
@@ -64,6 +69,12 @@ function madridTomorrow(): string {
   const date = new Date(`${madridToday()}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString().slice(0, 10);
+}
+
+// raw se guarda como JSON plano (v.any() de Convex no admite undefined
+// anidados; mismo comportamiento que la columna jsonb legacy)
+function toJson(value: unknown): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
 // ─────────────────── datos del pedido → payload Packlink ───────────────────
@@ -271,14 +282,11 @@ function quoteByKey(quotes: PacklinkQuote[], key: string) {
   return quotes.find((quote) => quote.key === key) ?? null;
 }
 
-type Supabase = Awaited<ReturnType<typeof requireAdmin>>;
-
 // Crea el borrador en el proveedor de la cotización y lo registra en el CRM.
 // Packlink: POST /shipments (borrador editable). Genei: POST /shipments crea
 // el envío en estado 7 (pendiente de pago, sin coste), con la primera
 // recogida de mañana; el transactionId para pagar queda en raw.
 async function createDraftForQuote(
-  supabase: Supabase,
   orderId: number,
   basics: OrderBasics,
   quote: PacklinkQuote,
@@ -335,28 +343,28 @@ async function createDraftForQuote(
     };
   }
 
-  await supabase.from("packlink_shipments").upsert({
+  await convexMutation(api.shipments.upsertShipment, {
     reference,
     provider: quote.provider,
-    custom_reference: basics.name,
-    order_id: orderId,
+    customReference: basics.name,
+    orderId,
     state: quote.provider === "genei" ? "DRAFT" : "AWAITING_COMPLETION",
     carrier: quote.carrier,
     service: quote.name || null,
-    service_id: String(quote.id),
-    price_base: quote.priceBase,
-    price_total: quote.priceTotal,
+    serviceId: String(quote.id),
+    priceBase: quote.priceBase,
+    priceTotal: quote.priceTotal,
     currency: quote.currency,
-    collection_date: collection?.date ?? null,
-    collection_time: collection?.time ?? null,
-    estimated_delivery_date: quote.estimatedDelivery,
-    home_to_home: quote.homeToHome,
-    raw: {
+    collectionDate: collection?.date ?? null,
+    collectionTime: collection?.time ?? null,
+    estimatedDeliveryDate: quote.estimatedDelivery,
+    homeToHome: quote.homeToHome,
+    raw: toJson({
       created_by: "crm",
       input,
       ...(transactionId != null ? { genei_transaction_id: transactionId } : {}),
-    } as unknown as Json,
-    synced_at: new Date().toISOString(),
+    }),
+    syncedAt: Date.now(),
   });
 
   revalidatePath(ORDERS_PATH);
@@ -381,14 +389,13 @@ export async function createPacklinkDraftAction(
   dims?: ParcelDims,
   dni?: string,
 ): Promise<DraftActionResult> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
 
   // No duplicar: solo bloquea si hay un envío vivo (los cancelados no cuentan)
-  const { data: existingRows } = await supabase
-    .from("packlink_shipments")
-    .select("reference, state")
-    .eq("order_id", orderId);
-  const alive = (existingRows ?? []).find(
+  const existingRows = await convexQuery(api.shipments.shipmentsByOrder, {
+    orderId,
+  });
+  const alive = existingRows.find(
     (row) => !["CANCELED", "CANCELLED"].includes(row.state ?? ""),
   );
   if (alive) {
@@ -418,7 +425,7 @@ export async function createPacklinkDraftAction(
     return { error: "No hay servicios disponibles para ese destino." };
   }
 
-  return createDraftForQuote(supabase, orderId, basics, quote);
+  return createDraftForQuote(orderId, basics, quote);
 }
 
 // Cambia el servicio (y re-programa la recogida) de un borrador existente.
@@ -431,7 +438,7 @@ export async function changePacklinkServiceAction(
   dims?: ParcelDims,
   dni?: string,
 ): Promise<DraftActionResult> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
   const basics = await orderBasics(orderId, sanitizeDims(dims));
   if ("error" in basics) return basics;
   const manualDni = sanitizeDni(dni);
@@ -440,11 +447,9 @@ export async function changePacklinkServiceAction(
     await recordManualDni(orderId, manualDni);
   }
 
-  const { data: current } = await supabase
-    .from("packlink_shipments")
-    .select("reference, provider")
-    .eq("reference", reference)
-    .maybeSingle();
+  const current = await convexQuery(api.shipments.shipmentByReference, {
+    reference,
+  });
   const currentProvider = current?.provider ?? "packlink";
 
   let quote: PacklinkQuote | null;
@@ -459,7 +464,7 @@ export async function changePacklinkServiceAction(
 
   if (currentProvider !== "packlink" || quote.provider !== "packlink") {
     // Crear primero el nuevo; solo si va bien se elimina el borrador viejo
-    const created = await createDraftForQuote(supabase, orderId, basics, quote);
+    const created = await createDraftForQuote(orderId, basics, quote);
     if ("error" in created) return created;
     try {
       if (currentProvider === "genei") await deleteGeneiShipment(reference);
@@ -467,10 +472,7 @@ export async function changePacklinkServiceAction(
     } catch (error) {
       console.warn(`[${currentProvider}] delete old draft`, error);
     }
-    await supabase
-      .from("packlink_shipments")
-      .delete()
-      .eq("reference", reference);
+    await convexMutation(api.shipments.deleteShipment, { reference });
     revalidatePath(ORDERS_PATH);
     return created;
   }
@@ -492,10 +494,7 @@ export async function changePacklinkServiceAction(
     if (error instanceof PacklinkApiError && error.status === 404) {
       // Borrador eliminado a mano en el panel → se quita del CRM y el pedido
       // vuelve a mostrar el botón de crear borrador
-      await supabase
-        .from("packlink_shipments")
-        .delete()
-        .eq("reference", reference);
+      await convexMutation(api.shipments.deleteShipment, { reference });
       revalidatePath(ORDERS_PATH);
       return {
         error:
@@ -505,22 +504,20 @@ export async function changePacklinkServiceAction(
     return { error: "Packlink no dejó cambiar el servicio." };
   }
 
-  await supabase
-    .from("packlink_shipments")
-    .update({
-      carrier: quote.carrier,
-      service: quote.name,
-      service_id: String(quote.id),
-      price_base: quote.priceBase,
-      price_total: quote.priceTotal,
-      currency: quote.currency,
-      collection_date: quote.collection?.date ?? null,
-      collection_time: quote.collection?.time ?? null,
-      estimated_delivery_date: quote.estimatedDelivery,
-      home_to_home: quote.homeToHome,
-      synced_at: new Date().toISOString(),
-    })
-    .eq("reference", reference);
+  await convexMutation(api.shipments.updateShipment, {
+    reference,
+    carrier: quote.carrier,
+    service: quote.name,
+    serviceId: String(quote.id),
+    priceBase: quote.priceBase,
+    priceTotal: quote.priceTotal,
+    currency: quote.currency,
+    collectionDate: quote.collection?.date ?? null,
+    collectionTime: quote.collection?.time ?? null,
+    estimatedDeliveryDate: quote.estimatedDelivery,
+    homeToHome: quote.homeToHome,
+    syncedAt: Date.now(),
+  });
 
   revalidatePath(ORDERS_PATH);
   return {
@@ -534,33 +531,19 @@ export async function changePacklinkServiceAction(
 
 // ─────────────────────────── pagar ───────────────────────────
 
-type DraftRow = {
-  reference: string;
-  provider: string;
-  service_id: string | null;
-  collection_date: string | null;
-  collection_time: string | null;
-  price_base: number | null;
-  price_total: number | null;
-  currency: string | null;
-  carrier: string | null;
-  service: string | null;
-  home_to_home: boolean | null;
-  estimated_delivery_date: string | null;
-  raw: Json;
-};
+// Fila del envío tal y como la devuelve convex/shipments.ts (camelCase, null)
+type DraftRow = NonNullable<
+  FunctionReturnType<typeof api.shipments.shipmentByReference>
+>;
 
 // Si el cobro de /v1/orders falla dejando un envío preparado, se sustituye el
 // borrador viejo por esa referencia (en Packlink y en el CRM).
-async function adoptPreparedShipment(
-  supabase: Awaited<ReturnType<typeof requireAdmin>>,
-  params: {
-    orderId: number;
-    customReference: string;
-    previousReference: string;
-    row: DraftRow;
-  },
-): Promise<string | null> {
+async function adoptPreparedShipment(params: {
+  orderId: number;
+  customReference: string;
+  previousReference: string;
+  row: DraftRow;
+}): Promise<string | null> {
   try {
     const candidates = (await findPacklinkByCustomRef(params.customReference))
       .filter(
@@ -578,10 +561,9 @@ async function adoptPreparedShipment(
     } catch {
       // ya no existía
     }
-    await supabase
-      .from("packlink_shipments")
-      .delete()
-      .eq("reference", params.previousReference);
+    await convexMutation(api.shipments.deleteShipment, {
+      reference: params.previousReference,
+    });
 
     let detail: Record<string, unknown> = {};
     try {
@@ -589,29 +571,29 @@ async function adoptPreparedShipment(
     } catch {
       // sin detalle, la fila se rellena con los datos del borrador
     }
-    await supabase.from("packlink_shipments").upsert({
+    await convexMutation(api.shipments.upsertShipment, {
       reference: prepared.reference,
-      custom_reference: params.customReference,
-      order_id: params.orderId,
+      customReference: params.customReference,
+      orderId: params.orderId,
       state: prepared.state ?? "READY_TO_PURCHASE",
       carrier: params.row.carrier,
       service: params.row.service,
-      service_id: params.row.service_id,
-      price_base: params.row.price_base,
-      price_total: params.row.price_total,
+      serviceId: params.row.serviceId,
+      priceBase: params.row.priceBase,
+      priceTotal: params.row.priceTotal,
       currency: params.row.currency ?? "EUR",
-      collection_date:
+      collectionDate:
         typeof detail.collection_date === "string"
           ? detail.collection_date.replaceAll("/", "-")
-          : params.row.collection_date,
-      collection_time:
+          : params.row.collectionDate,
+      collectionTime:
         typeof detail.collection_time === "string"
           ? detail.collection_time
-          : params.row.collection_time,
-      estimated_delivery_date: params.row.estimated_delivery_date,
-      home_to_home: params.row.home_to_home,
-      raw: { ...(detail as Record<string, Json>), created_by: "crm" } as Json,
-      synced_at: new Date().toISOString(),
+          : params.row.collectionTime,
+      estimatedDeliveryDate: params.row.estimatedDeliveryDate,
+      homeToHome: params.row.homeToHome,
+      raw: toJson({ ...detail, created_by: "crm" }),
+      syncedAt: Date.now(),
     });
     return prepared.reference;
   } catch (error) {
@@ -634,10 +616,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Pago de un envío Genei: cobra la transacción contra el SALDO de la cuenta
 // (la referencia no cambia) y refresca detalle, tracking y etiqueta. Si el
 // carrier tarda en tramitar, el cron completa tracking/etiqueta después.
-async function payGeneiDraft(
-  supabase: Supabase,
-  row: DraftRow,
-): Promise<PayResult> {
+async function payGeneiDraft(row: DraftRow): Promise<PayResult> {
   const transactionId = (row.raw as { genei_transaction_id?: number } | null)
     ?.genei_transaction_id;
   if (!transactionId) {
@@ -657,14 +636,18 @@ async function payGeneiDraft(
     };
   }
 
-  // Detalle y etiqueta pueden tardar unos segundos tras el pago
+  // Detalle y etiqueta pueden tardar unos segundos tras el pago. La etiqueta
+  // (base64) se sube a Convex File Storage; label_url apunta al route del admin
   let detail: Record<string, unknown> | null = null;
   let labelUrl: string | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     await sleep(attempt === 0 ? 1500 : 3000);
     detail = await getGeneiShipmentDetail(row.reference).catch(() => detail);
-    if (!labelUrl && (await getGeneiLabelPdf(row.reference))) {
-      labelUrl = geneiLabelRoute(row.reference);
+    if (!labelUrl) {
+      const pdf = await getGeneiLabelPdf(row.reference);
+      if (pdf && (await storeGeneiLabel(row.reference, pdf))) {
+        labelUrl = geneiLabelRoute(row.reference);
+      }
     }
     if (labelUrl && detail) break;
   }
@@ -673,27 +656,25 @@ async function payGeneiDraft(
     ? (parsed.trackingUrl ?? (await getGeneiTrackingUrl(row.reference)))
     : null;
 
-  await supabase
-    .from("packlink_shipments")
-    .update({
-      // pagado: aunque el detalle tarde, ya no es borrador
-      state: !parsed || parsed.state === "DRAFT" ? "PROCESSING" : parsed.state,
-      cost: parsed?.costBase ?? row.price_base,
-      currency: row.currency ?? "EUR",
-      tracking: parsed?.tracking ?? null,
-      tracking_url: trackingUrl,
-      label_url: labelUrl,
-      collection_date: parsed?.collectionDate ?? row.collection_date,
-      collection_time: parsed?.collectionTime ?? row.collection_time,
-      shipment_date: new Date().toISOString(),
-      raw: {
-        ...((detail ?? {}) as Record<string, Json>),
-        genei_transaction_id: transactionId,
-        created_by: "crm",
-      } as Json,
-      synced_at: new Date().toISOString(),
-    })
-    .eq("reference", row.reference);
+  await convexMutation(api.shipments.updateShipment, {
+    reference: row.reference,
+    // pagado: aunque el detalle tarde, ya no es borrador
+    state: !parsed || parsed.state === "DRAFT" ? "PROCESSING" : parsed.state,
+    cost: parsed?.costBase ?? row.priceBase,
+    currency: row.currency ?? "EUR",
+    tracking: parsed?.tracking ?? null,
+    trackingUrl,
+    labelUrl,
+    collectionDate: parsed?.collectionDate ?? row.collectionDate,
+    collectionTime: parsed?.collectionTime ?? row.collectionTime,
+    shipmentDate: Date.now(),
+    raw: toJson({
+      ...(detail ?? {}),
+      genei_transaction_id: transactionId,
+      created_by: "crm",
+    }),
+    syncedAt: Date.now(),
+  });
 
   // Fulfillment en Shopify si ya hay tracking; si no, lo hará el cron
   try {
@@ -707,7 +688,7 @@ async function payGeneiDraft(
     ok: true,
     reference: row.reference,
     labelUrl,
-    total: row.price_total != null ? `${row.price_total.toFixed(2)} €` : null,
+    total: row.priceTotal != null ? `${row.priceTotal.toFixed(2)} €` : null,
   };
 }
 
@@ -718,21 +699,17 @@ export async function payPacklinkDraftAction(
   reference: string,
   orderId: number,
 ): Promise<PayResult> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
 
-  const { data: row } = await supabase
-    .from("packlink_shipments")
-    .select(
-      "reference, provider, service_id, collection_date, collection_time, price_base, price_total, currency, carrier, service, home_to_home, estimated_delivery_date, raw",
-    )
-    .eq("reference", reference)
-    .maybeSingle();
-  if (!row?.service_id) {
+  const row = await convexQuery(api.shipments.shipmentByReference, {
+    reference,
+  });
+  if (!row?.serviceId) {
     return { error: "No encuentro el borrador o no tiene servicio elegido." };
   }
 
   if (row.provider === "genei") {
-    return payGeneiDraft(supabase, row);
+    return payGeneiDraft(row);
   }
 
   const basics = await orderBasics(orderId);
@@ -748,10 +725,10 @@ export async function payPacklinkDraftAction(
   // Recogida: la del borrador si sigue siendo futura; si caducó, la próxima
   // mañana disponible del servicio.
   let collection =
-    row.collection_date && row.collection_date >= madridToday()
+    row.collectionDate && row.collectionDate >= madridToday()
       ? {
-          date: row.collection_date,
-          time: row.collection_time ?? "09:00-13:00",
+          date: row.collectionDate,
+          time: row.collectionTime ?? "09:00-13:00",
         }
       : null;
   if (!collection) {
@@ -762,7 +739,7 @@ export async function payPacklinkDraftAction(
         parcels,
       });
       collection =
-        quotes.find((quote) => quote.id === Number(row.service_id))
+        quotes.find((quote) => quote.id === Number(row.serviceId))
           ?.collection ?? null;
     } catch {
       collection = null;
@@ -782,7 +759,7 @@ export async function payPacklinkDraftAction(
     parcels,
     content: basics.content,
     contentValue: basics.contentValue,
-    serviceId: Number(row.service_id),
+    serviceId: Number(row.serviceId),
     customReference: basics.name,
     collection,
   };
@@ -795,7 +772,7 @@ export async function payPacklinkDraftAction(
     // POST /v1/orders deja a veces el envío PREPARADO (READY_TO_PURCHASE)
     // aunque el cobro falle con 500 (verificado 2026-07-06): se adopta esa
     // referencia para no duplicar envíos en cada reintento.
-    const adopted = await adoptPreparedShipment(supabase, {
+    const adopted = await adoptPreparedShipment({
       orderId,
       customReference: basics.name,
       previousReference: reference,
@@ -820,7 +797,7 @@ export async function payPacklinkDraftAction(
   } catch (error) {
     console.warn("[packlink] delete old draft", error);
   }
-  await supabase.from("packlink_shipments").delete().eq("reference", reference);
+  await convexMutation(api.shipments.deleteShipment, { reference });
 
   // Fila del envío comprado; el detalle y la etiqueta pueden tardar unos
   // segundos en estar listos.
@@ -839,42 +816,42 @@ export async function payPacklinkDraftAction(
   }
 
   const trackings = detail.trackings;
-  await supabase.from("packlink_shipments").upsert({
+  await convexMutation(api.shipments.upsertShipment, {
     reference: purchased.reference,
-    custom_reference: basics.name,
-    order_id: orderId,
+    customReference: basics.name,
+    orderId,
     state:
       typeof detail.state === "string"
         ? (detail.state as string).toUpperCase()
         : "PROCESSING",
     carrier: row.carrier,
     service: row.service,
-    service_id: row.service_id,
-    price_base: row.price_base,
-    price_total: purchased.totalPrice ?? row.price_total,
+    serviceId: row.serviceId,
+    priceBase: row.priceBase,
+    priceTotal: purchased.totalPrice ?? row.priceTotal,
     currency: row.currency ?? "EUR",
-    collection_date:
+    collectionDate:
       typeof detail.collection_date === "string"
         ? detail.collection_date.replaceAll("/", "-")
         : (collection?.date ?? null),
-    collection_time:
+    collectionTime:
       typeof detail.collection_time === "string"
         ? detail.collection_time
         : (collection?.time ?? null),
-    estimated_delivery_date: row.estimated_delivery_date,
-    home_to_home: row.home_to_home,
+    estimatedDeliveryDate: row.estimatedDeliveryDate,
+    homeToHome: row.homeToHome,
     tracking: Array.isArray(trackings)
       ? ((trackings[0] as string | undefined) ?? null)
       : null,
-    tracking_url:
+    trackingUrl:
       typeof detail.tracking_url === "string" ? detail.tracking_url : null,
-    label_url: labelUrl,
-    raw: {
-      ...(detail as Record<string, Json>),
+    labelUrl,
+    raw: toJson({
+      ...detail,
       receipt: purchased.receipt,
       created_by: "crm",
-    } as Json,
-    synced_at: new Date().toISOString(),
+    }),
+    syncedAt: Date.now(),
   });
 
   // Fulfillment en Shopify (tracking + email al cliente) si ya hay tracking;
@@ -902,30 +879,31 @@ export async function payPacklinkDraftAction(
 export async function getLabelAction(
   reference: string,
 ): Promise<{ url?: string; error?: string }> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
 
-  const { data: row } = await supabase
-    .from("packlink_shipments")
-    .select("provider")
-    .eq("reference", reference)
-    .maybeSingle();
+  const row = await convexQuery(api.shipments.shipmentByReference, {
+    reference,
+  });
 
   try {
     let url: string | undefined;
     if (row?.provider === "genei") {
-      // La etiqueta se sirve por el route handler del admin; aquí solo se
-      // comprueba que Genei ya la tiene generada
+      // La etiqueta se sirve por el route handler del admin desde Convex
+      // File Storage; si Genei ya la generó, se sube aquí (idempotente)
       const pdf = await getGeneiLabelPdf(reference);
-      url = pdf ? geneiLabelRoute(reference) : undefined;
+      if (pdf) {
+        await storeGeneiLabel(reference, pdf);
+        url = geneiLabelRoute(reference);
+      }
     } else {
       const labels = await getPacklinkLabels(reference);
       url = labels[0];
     }
     if (!url) return { error: "La etiqueta aún no está disponible." };
-    await supabase
-      .from("packlink_shipments")
-      .update({ label_url: url })
-      .eq("reference", reference);
+    await convexMutation(api.shipments.updateShipment, {
+      reference,
+      labelUrl: url,
+    });
     revalidatePath(ORDERS_PATH);
     return { url };
   } catch (error) {
@@ -934,17 +912,16 @@ export async function getLabelAction(
   }
 }
 
-// Borra un borrador (p. ej. si el pedido se envió nativo desde Shopify)
+// Borra un borrador (p. ej. si el pedido se envió nativo desde Shopify).
+// El deleteShipment de Convex también elimina la etiqueta de File Storage.
 export async function deletePacklinkDraftAction(
   reference: string,
 ): Promise<{ ok?: boolean; error?: string }> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
 
-  const { data: row } = await supabase
-    .from("packlink_shipments")
-    .select("provider")
-    .eq("reference", reference)
-    .maybeSingle();
+  const row = await convexQuery(api.shipments.shipmentByReference, {
+    reference,
+  });
 
   try {
     if (row?.provider === "genei") await deleteGeneiShipment(reference);
@@ -958,7 +935,7 @@ export async function deletePacklinkDraftAction(
     }
     // 404 = ya lo borraron en el panel; basta con limpiar el CRM
   }
-  await supabase.from("packlink_shipments").delete().eq("reference", reference);
+  await convexMutation(api.shipments.deleteShipment, { reference });
   revalidatePath(ORDERS_PATH);
   return { ok: true };
 }

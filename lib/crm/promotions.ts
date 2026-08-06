@@ -2,26 +2,28 @@ import {
   unstable_cacheLife as cacheLife,
   unstable_cacheTag as cacheTag,
 } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexQuery, msToIso } from "@/lib/convex/server";
 
 export const PROMOTIONS_TAG = "promotions";
+
+// Los datos viven en Convex (convex/promotions.ts); este módulo adapta los
+// docs a la forma legacy (snake_case, ISO, null) que espera el storefront.
+// Regla: las queries de Convex no leen el reloj, `now` viaja como argumento.
 
 // Promo general vigente (activa y dentro de fechas). Sin cache: la usa
 // /api/subscribe para decidir qué código va en la bienvenida.
 export async function getActiveGeneralPromotion() {
-  const supabase = createAdminClient();
-  const nowIso = new Date().toISOString();
-  const { data } = await supabase
-    .from("promotions")
-    .select("id, code, percentage, ends_at")
-    .eq("type", "general")
-    .eq("active", true)
-    .lte("starts_at", nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data;
+  const promo = await convexQuery(api.promotions.activeGeneral, {
+    now: Date.now(),
+  });
+  if (!promo) return null;
+  return {
+    id: promo._id,
+    code: promo.code,
+    percentage: promo.percentage,
+    ends_at: msToIso(promo.endsAt ?? undefined),
+  };
 }
 
 // Datos de la promo con este código (tipo + fecha de fin), para: (1) caducar la
@@ -32,15 +34,12 @@ export async function getPromotionByCode(code: string) {
   cacheTag(PROMOTIONS_TAG);
   cacheLife("minutes");
 
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("promotions")
-    .select("type, ends_at")
-    .eq("code", code)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data;
+  const promo = await convexQuery(api.promotions.byCode, { code });
+  if (!promo) return null;
+  return {
+    type: promo.type,
+    ends_at: msToIso(promo.endsAt ?? undefined),
+  };
 }
 
 // Promo anunciada en el storefront (toggle `announce` del CRM). Cacheada con
@@ -51,18 +50,14 @@ export async function getAnnouncedPromotion() {
   cacheTag(PROMOTIONS_TAG);
   cacheLife("minutes");
 
-  const supabase = createAdminClient();
-  const nowIso = new Date().toISOString();
-  const { data } = await supabase
-    .from("promotions")
-    .select("name, code, percentage, ends_at")
-    .eq("type", "general")
-    .eq("active", true)
-    .eq("announce", true)
-    .lte("starts_at", nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data;
+  const promo = await convexQuery(api.promotions.announced, {
+    now: Date.now(),
+  });
+  if (!promo) return null;
+  return {
+    name: promo.name,
+    code: promo.code,
+    percentage: promo.percentage,
+    ends_at: msToIso(promo.endsAt ?? undefined),
+  };
 }

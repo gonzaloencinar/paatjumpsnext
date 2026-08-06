@@ -1,14 +1,16 @@
 import { materializeCampaignAudience, parseFacets } from "@/lib/crm/segments";
 import { IDENTITY_PARAM } from "@/lib/crm/identity";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { identityToken, unsubscribeUrl } from "@/lib/email/tokens";
 import { baseUrl } from "@/lib/utils";
 
 // Motor de envío de campañas (plan §16.3). Lo dispara el cron cada minuto:
-// cada tick es idempotente y re-entrante — reclama un lote pequeño vía RPC
-// (skip locked), envía uno a uno respetando el rate limit de Resend (~2 req/s)
+// cada tick es idempotente y re-entrante — reclama un lote pequeño vía la
+// mutation transaccional claimCampaignBatch (el sustituto del RPC skip
+// locked), envía uno a uno respetando el rate limit de Resend (~2 req/s)
 // y termina dentro del maxDuration de la función. Lo pendiente cae al
 // siguiente tick. El batch API de Resend queda como optimización futura
 // cuando el volumen lo pida.
@@ -80,7 +82,6 @@ export type CampaignTickSummary = {
 };
 
 export async function processCampaigns(): Promise<CampaignTickSummary> {
-  const supabase = createAdminClient();
   const summary: CampaignTickSummary = {
     promoted: 0,
     sent: 0,
@@ -90,49 +91,37 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
   };
 
   // 1) Programadas que ya tocan: materializar el snapshot del segmento y
-  //    pasar a 'sending' (idempotente: on conflict do nothing).
-  const { data: due, error: dueError } = await supabase
-    .from("campaigns")
-    .select("id, segment")
-    .eq("status", "scheduled")
-    .lte("scheduled_at", new Date().toISOString());
-  if (dueError) throw dueError;
+  //    pasar a 'sending' (idempotente: los destinatarios ya presentes se
+  //    ignoran; la promoción es un update condicional optimista).
+  const due = await convexQuery(api.engine.dueScheduledCampaigns, {
+    now: Date.now(),
+  });
 
-  for (const campaign of due ?? []) {
+  for (const campaign of due) {
     await materializeCampaignAudience(
-      supabase,
+      null,
       campaign.id,
       parseFacets(campaign.segment),
     );
-    await supabase
-      .from("campaigns")
-      .update({ status: "sending" })
-      .eq("id", campaign.id)
-      .eq("status", "scheduled");
+    await convexMutation(api.engine.promoteScheduled, { id: campaign.id });
     summary.promoted += 1;
   }
 
   // 2) Campañas en envío: presupuesto de tick compartido entre todas.
-  const { data: sending, error: sendingError } = await supabase
-    .from("campaigns")
-    .select("id, name, subject, body_html, preheader")
-    .eq("status", "sending")
-    .order("created_at");
-  if (sendingError) throw sendingError;
+  const sending = await convexQuery(api.engine.sendingCampaigns, {});
 
   let budget = BATCH_SIZE;
 
-  for (const campaign of sending ?? []) {
+  for (const campaign of sending) {
     if (budget <= 0) break;
 
-    const { data: batch, error: claimError } = await supabase.rpc(
-      "claim_campaign_batch",
-      { p_campaign_id: campaign.id, p_limit: budget },
-    );
-    if (claimError) throw claimError;
+    const batch = await convexMutation(api.engine.claimCampaignBatch, {
+      id: campaign.id,
+      limit: budget,
+    });
 
-    if (!batch || batch.length === 0) {
-      await finalizeIfDone(supabase, campaign, summary);
+    if (batch.length === 0) {
+      await finalizeIfDone(campaign, summary);
       continue;
     }
 
@@ -143,10 +132,10 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
       try {
         const result = await sendCrmEmail({
           to: recipient.email,
-          subject: mergeName(campaign.subject ?? "", recipient.first_name),
+          subject: mergeName(campaign.subject ?? "", recipient.firstName),
           react: CampaignEmail({
             bodyHtml: tagStoreLinks(
-              mergeName(campaign.body_html ?? "", recipient.first_name),
+              mergeName(campaign.bodyHtml ?? "", recipient.firstName),
               campaign.name,
               recipient.email,
             ),
@@ -154,7 +143,7 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
             unsubscribeUrl: unsubscribeUrl(recipient.email),
           }),
           template: "campaign",
-          contactId: recipient.contact_id,
+          contactId: recipient.contactId,
           campaignId: campaign.id,
           // Determinista: repetir el tick tras un crash no duplica el email
           // (Resend dedupe por Idempotency-Key).
@@ -162,16 +151,17 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
         });
 
         if ("skipped" in result) {
-          await supabase
-            .from("campaign_recipients")
-            .update({ status: "skipped" })
-            .eq("id", recipient.id);
+          await convexMutation(api.engine.markRecipient, {
+            id: recipient.id,
+            status: "skipped",
+          });
           summary.skipped += 1;
         } else {
-          await supabase
-            .from("campaign_recipients")
-            .update({ status: "sent", email_send_id: result.emailSendId })
-            .eq("id", recipient.id);
+          await convexMutation(api.engine.markRecipient, {
+            id: recipient.id,
+            status: "sent",
+            emailSendId: result.emailSendId,
+          });
           summary.sent += 1;
         }
         consecutiveFailures = 0;
@@ -180,10 +170,10 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
           `[campaigns] fallo enviando a destinatario ${recipient.id}`,
           error,
         );
-        await supabase
-          .from("campaign_recipients")
-          .update({ status: "failed" })
-          .eq("id", recipient.id);
+        await convexMutation(api.engine.markRecipient, {
+          id: recipient.id,
+          status: "failed",
+        });
         summary.failed += 1;
         consecutiveFailures += 1;
         // Fallos seguidos = problema del proveedor, no del destinatario:
@@ -193,27 +183,18 @@ export async function processCampaigns(): Promise<CampaignTickSummary> {
       await sleep(SEND_INTERVAL_MS);
     }
 
-    await finalizeIfDone(supabase, campaign, summary);
+    await finalizeIfDone(campaign, summary);
   }
 
   return summary;
 }
 
 async function finalizeIfDone(
-  supabase: ReturnType<typeof createAdminClient>,
   campaign: { id: string; name: string },
   summary: CampaignTickSummary,
 ) {
-  const { count } = await supabase
-    .from("campaign_recipients")
-    .select("id", { count: "exact", head: true })
-    .eq("campaign_id", campaign.id)
-    .in("status", ["pending", "sending"]);
-  if ((count ?? 0) > 0) return;
-  await supabase
-    .from("campaigns")
-    .update({ status: "sent", sent_at: new Date().toISOString() })
-    .eq("id", campaign.id)
-    .eq("status", "sending");
-  summary.completed.push(campaign.name);
+  const completed = await convexMutation(api.engine.finalizeCampaignIfDone, {
+    id: campaign.id,
+  });
+  if (completed) summary.completed.push(campaign.name);
 }

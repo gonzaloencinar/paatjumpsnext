@@ -1,4 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import type { FunctionReturnType } from "convex/server";
+import { api } from "@/convex/_generated/api";
+import { convexQuery, msToIso } from "@/lib/convex/server";
 import {
   isUrgentShipping,
   madridToday,
@@ -8,9 +10,11 @@ import {
 
 // Consultas de la parte "tienda" del panel (/admin/orders, /admin/customers,
 // /admin/analytics). Los datos los alimentan el webhook orders/create y el
-// cron shopify-sync (lib/crm/shopify-sync.ts). Las métricas se calculan en
+// cron shopify-sync (lib/crm/shopify-sync.ts). Los datos viven en Convex
+// (convex/store.ts); este módulo adapta los docs a la forma legacy
+// (snake_case, ISO, null) que esperan las páginas y calcula las métricas en
 // memoria sobre los pedidos válidos: a la escala actual (miles de pedidos)
-// una pasada en TS es más simple y flexible que RPCs de agregación.
+// una pasada en TS es más simple y flexible que agregar en la query.
 
 export const ORDERS_PER_PAGE = 25;
 export const CUSTOMERS_PER_PAGE = 25;
@@ -23,7 +27,8 @@ export function shopifyAdminUrl(path: string) {
   return `https://admin.shopify.com/store/${STORE_HANDLE}/${path}`;
 }
 
-// El interpolado de .or() usa comas y paréntesis como sintaxis
+// Herencia del interpolado de .or() de PostgREST (comas y paréntesis eran
+// sintaxis): se conserva para que las búsquedas se comporten igual que antes
 const sanitizeSearch = (q: string) => q.replace(/[,()%]/g, " ").trim();
 
 // ───────────────────────────── pedidos + envíos ─────────────────────────────
@@ -60,49 +65,29 @@ const PHASE_RANK: Record<PacklinkPhase, number> = {
   incidencia: 6,
 };
 
-const SHIPMENT_COLS =
-  "reference, provider, custom_reference, order_id, state, carrier, service, service_id, price_base, price_total, cost, collection_date, collection_time, estimated_delivery_date, home_to_home, tracking, tracking_url, label_url";
-
-type ShipmentRow = {
-  reference: string;
-  provider: string;
-  custom_reference: string | null;
-  order_id: number | null;
-  state: string | null;
-  carrier: string | null;
-  service: string | null;
-  service_id: string | null;
-  price_base: number | null;
-  price_total: number | null;
-  cost: number | null;
-  collection_date: string | null;
-  collection_time: string | null;
-  estimated_delivery_date: string | null;
-  home_to_home: boolean | null;
-  tracking: string | null;
-  tracking_url: string | null;
-  label_url: string | null;
-};
+type ShipmentRow = FunctionReturnType<
+  typeof api.store.shipmentsForOrders
+>[number];
 
 function toShipment(row: ShipmentRow): OrderShipment {
   return {
     reference: row.reference,
     provider: row.provider,
     state: row.state,
-    phase: packlinkPhase(row.state, row.collection_date),
+    phase: packlinkPhase(row.state, row.collectionDate),
     carrier: row.carrier,
     service: row.service,
-    service_id: row.service_id,
-    price_base: row.price_base,
-    price_total: row.price_total,
+    service_id: row.serviceId,
+    price_base: row.priceBase,
+    price_total: row.priceTotal,
     cost: row.cost,
-    collection_date: row.collection_date,
-    collection_time: row.collection_time,
-    estimated_delivery_date: row.estimated_delivery_date,
-    home_to_home: row.home_to_home,
+    collection_date: row.collectionDate,
+    collection_time: row.collectionTime,
+    estimated_delivery_date: row.estimatedDeliveryDate,
+    home_to_home: row.homeToHome,
     tracking: row.tracking,
-    tracking_url: row.tracking_url,
-    label_url: row.label_url,
+    tracking_url: row.trackingUrl,
+    label_url: row.labelUrl,
   };
 }
 
@@ -113,35 +98,19 @@ async function getOrderShipments(
 ): Promise<Map<number, OrderShipment>> {
   const best = new Map<number, OrderShipment>();
   if (orders.length === 0) return best;
-  const supabase = await createClient();
 
-  const ids = orders.map((o) => o.id);
   const names = orders.map((o) => o.name).filter(Boolean) as string[];
-  const [byId, byName] = await Promise.all([
-    supabase
-      .from("packlink_shipments")
-      .select(SHIPMENT_COLS)
-      .in("order_id", ids),
-    names.length > 0
-      ? supabase
-          .from("packlink_shipments")
-          .select(SHIPMENT_COLS)
-          .in("custom_reference", names)
-      : Promise.resolve({ data: [] as ShipmentRow[] }),
-  ]);
+  const rows = await convexQuery(api.store.shipmentsForOrders, {
+    orderIds: orders.map((o) => o.id),
+    names,
+  });
 
   const nameToId = new Map(
     orders.filter((o) => o.name).map((o) => [o.name!, o.id]),
   );
-  const seen = new Set<string>();
-  for (const row of [
-    ...((byId.data ?? []) as ShipmentRow[]),
-    ...((byName.data ?? []) as ShipmentRow[]),
-  ]) {
-    if (seen.has(row.reference)) continue;
-    seen.add(row.reference);
+  for (const row of rows) {
     const orderId =
-      row.order_id ?? nameToId.get(row.custom_reference ?? "") ?? null;
+      row.orderId ?? nameToId.get(row.customReference ?? "") ?? null;
     if (orderId == null) continue;
     const shipment = toShipment(row);
     const current = best.get(orderId);
@@ -173,8 +142,30 @@ export type OrdersViewParams = {
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-// Máximo de pedidos que se filtran/paginan en memoria (escala actual: cientos)
-const VIEW_FETCH_LIMIT = 1000;
+
+// Pedido en la forma legacy que renderiza /admin/orders
+type OrderRow = {
+  id: number;
+  name: string | null;
+  email: string | null;
+  created_at: string;
+  total_price: number | null;
+  total_refunded: number;
+  currency: string | null;
+  financial_status: string | null;
+  fulfillment_status: string | null;
+  cancelled_at: string | null;
+  test: boolean;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  discount_code: string | null;
+  shipping_city: string | null;
+  shipping_province: string | null;
+  shipping_country_code: string | null;
+  shipping_line_title: string | null;
+  line_items: unknown;
+};
 
 function madridDayOffset(base: string, days: number): string {
   const date = new Date(`${base}T12:00:00Z`);
@@ -183,43 +174,58 @@ function madridDayOffset(base: string, days: number): string {
 }
 
 // Vista de /admin/orders: pedidos + su envío Packlink + KPIs operativos.
-// Los filtros de envío/recogida/urgente se aplican en memoria sobre el
-// conjunto ya filtrado por SQL (mismo criterio in-memory que analytics).
+// Los filtros de búsqueda/fuente/estado/fechas los aplica la query Convex;
+// los de envío/recogida/urgente se aplican en memoria sobre ese conjunto
+// (mismo criterio in-memory que analytics).
 export async function getOrdersView(params: OrdersViewParams) {
-  const supabase = await createClient();
+  const q = params.q ? sanitizeSearch(params.q) : "";
+  const estado =
+    params.estado === "pendientes" || params.estado === "enviados"
+      ? params.estado
+      : undefined;
+  // Mismos límites del día que el SQL legacy (offset fijo +02:00 de Madrid)
+  const desdeMs =
+    params.desde && DATE_RE.test(params.desde)
+      ? Date.parse(`${params.desde}T00:00:00+02:00`)
+      : undefined;
+  const hastaMs =
+    params.hasta && DATE_RE.test(params.hasta)
+      ? Date.parse(`${params.hasta}T23:59:59+02:00`)
+      : undefined;
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "id, name, email, created_at, total_price, total_refunded, currency, financial_status, fulfillment_status, cancelled_at, test, utm_source, utm_medium, utm_campaign, discount_code, shipping_city, shipping_province, shipping_country_code, shipping_line_title, line_items",
-    )
-    .order("created_at", { ascending: false })
-    .limit(VIEW_FETCH_LIMIT);
+  const [rows, kpiData] = await Promise.all([
+    convexQuery(api.store.ordersForView, {
+      q: q || undefined,
+      fuente: params.fuente || undefined,
+      estado,
+      desdeMs,
+      hastaMs,
+    }),
+    convexQuery(api.store.orderKpis, {}),
+  ]);
 
-  if (params.q) {
-    const q = sanitizeSearch(params.q);
-    if (q) query = query.or(`email.ilike.%${q}%,name.ilike.%${q}%`);
-  }
-  if (params.fuente) query = query.eq("utm_source", params.fuente);
-  if (params.estado === "pendientes") {
-    query = query
-      .is("cancelled_at", null)
-      .eq("test", false)
-      .neq("financial_status", "refunded")
-      .or("fulfillment_status.is.null,fulfillment_status.neq.fulfilled");
-  } else if (params.estado === "enviados") {
-    query = query.eq("fulfillment_status", "fulfilled");
-  }
-  if (params.desde && DATE_RE.test(params.desde)) {
-    query = query.gte("created_at", `${params.desde}T00:00:00+02:00`);
-  }
-  if (params.hasta && DATE_RE.test(params.hasta)) {
-    query = query.lte("created_at", `${params.hasta}T23:59:59+02:00`);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  let orders = data ?? [];
+  let orders: OrderRow[] = rows.map((o) => ({
+    id: o.orderId,
+    name: o.name,
+    email: o.email,
+    created_at: new Date(o.createdAt).toISOString(),
+    total_price: o.totalPrice,
+    total_refunded: o.totalRefunded,
+    currency: o.currency,
+    financial_status: o.financialStatus,
+    fulfillment_status: o.fulfillmentStatus,
+    cancelled_at: msToIso(o.cancelledAt ?? undefined),
+    test: o.test,
+    utm_source: o.utmSource,
+    utm_medium: o.utmMedium,
+    utm_campaign: o.utmCampaign,
+    discount_code: o.discountCode,
+    shipping_city: o.shippingCity,
+    shipping_province: o.shippingProvince,
+    shipping_country_code: o.shippingCountryCode,
+    shipping_line_title: o.shippingLineTitle,
+    line_items: o.lineItems,
+  }));
 
   const shipments = await getOrderShipments(orders);
 
@@ -266,31 +272,15 @@ export async function getOrdersView(params: OrdersViewParams) {
   }
 
   // KPIs globales (independientes de los filtros activos)
-  const [pendingRes, shipmentKpiRes] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("id, shipping_line_title")
-      .is("cancelled_at", null)
-      .eq("test", false)
-      .neq("financial_status", "refunded")
-      .or("fulfillment_status.is.null,fulfillment_status.neq.fulfilled")
-      .limit(VIEW_FETCH_LIMIT),
-    supabase
-      .from("packlink_shipments")
-      .select("reference, state, collection_date")
-      .not("state", "in", "(CANCELED,CANCELLED)")
-      .limit(VIEW_FETCH_LIMIT),
-  ]);
-  const pendingOrders = pendingRes.data ?? [];
-  const kpiPhases = (shipmentKpiRes.data ?? []).map((s) => ({
-    phase: packlinkPhase(s.state, s.collection_date),
-    collection_date: s.collection_date,
+  const kpiPhases = kpiData.shipments.map((s) => ({
+    phase: packlinkPhase(s.state, s.collectionDate),
+    collection_date: s.collectionDate,
   }));
 
   const kpis = {
-    pendientes: pendingOrders.length,
-    urgentes: pendingOrders.filter((o) =>
-      isUrgentShipping(o.shipping_line_title),
+    pendientes: kpiData.pending.length,
+    urgentes: kpiData.pending.filter((o) =>
+      isUrgentShipping(o.shippingLineTitle),
     ).length,
     recogidaHoy: kpiPhases.filter(
       (s) => s.phase === "recogida" && s.collection_date === today,
@@ -311,15 +301,10 @@ export async function getOrdersView(params: OrdersViewParams) {
   // responder (lib/crm/dni-requests.ts) → badge en la columna Envío
   const awaitingId = new Set<number>();
   if (pageOrders.length > 0) {
-    const { data: pendingDni } = await supabase
-      .from("order_dni_requests")
-      .select("order_id")
-      .is("submitted_at", null)
-      .in(
-        "order_id",
-        pageOrders.map((o) => o.id),
-      );
-    for (const row of pendingDni ?? []) awaitingId.add(row.order_id);
+    const pendingDni = await convexQuery(api.store.pendingDniOrderIds, {
+      orderIds: pageOrders.map((o) => o.id),
+    });
+    for (const orderId of pendingDni) awaitingId.add(orderId);
   }
 
   return {
@@ -338,50 +323,44 @@ export async function getOrdersView(params: OrdersViewParams) {
 // ───────────────────────────── clientes ─────────────────────────────
 
 export async function listCustomers(params: { q?: string; page?: number }) {
-  const supabase = await createClient();
   const page = Math.max(1, params.page ?? 1);
   const from = (page - 1) * CUSTOMERS_PER_PAGE;
+  const q = params.q ? sanitizeSearch(params.q) : "";
 
-  let query = supabase
-    .from("customers")
-    .select(
-      "id, email, first_name, last_name, phone, orders_count, total_spent, currency, city, province, country, country_code, accepts_email_marketing, shopify_created_at",
-      { count: "exact" },
-    )
-    .order("total_spent", { ascending: false })
-    .order("orders_count", { ascending: false })
-    .range(from, from + CUSTOMERS_PER_PAGE - 1);
+  // La query devuelve el conjunto completo filtrado y ordenado por gasto;
+  // el count exacto es la longitud y la página se recorta en memoria.
+  const all = await convexQuery(api.store.customersForList, {
+    q: q || undefined,
+  });
+  const customers = all
+    .slice(from, from + CUSTOMERS_PER_PAGE)
+    .map((c) => ({
+      id: c.customerId,
+      email: c.email,
+      first_name: c.firstName,
+      last_name: c.lastName,
+      phone: c.phone,
+      orders_count: c.ordersCount,
+      total_spent: c.totalSpent,
+      currency: c.currency,
+      city: c.city,
+      province: c.province,
+      country: c.country,
+      country_code: c.countryCode,
+      accepts_email_marketing: c.acceptsEmailMarketing,
+      shopify_created_at: msToIso(c.shopifyCreatedAt ?? undefined),
+    }));
 
-  if (params.q) {
-    const q = sanitizeSearch(params.q);
-    if (q) {
-      query = query.or(
-        `email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`,
-      );
-    }
-  }
-
-  const { data, count, error } = await query;
-  if (error) throw error;
-  const customers = data ?? [];
-
-  // Último pedido de los clientes listados (una consulta para la página)
+  // Último pedido de los clientes listados (una consulta para la página;
+  // llegan más recientes primero → el primero de cada cliente es el último)
   const lastOrderAt = new Map<number, string>();
   if (customers.length > 0) {
-    const { data: orderRows } = await supabase
-      .from("orders")
-      .select("customer_id, created_at")
-      .in(
-        "customer_id",
-        customers.map((c) => c.id),
-      )
-      .is("cancelled_at", null)
-      .eq("test", false)
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    for (const row of orderRows ?? []) {
-      if (row.customer_id != null && !lastOrderAt.has(row.customer_id)) {
-        lastOrderAt.set(row.customer_id, row.created_at);
+    const orderRows = await convexQuery(api.store.lastOrdersForCustomers, {
+      customerIds: customers.map((c) => c.id),
+    });
+    for (const row of orderRows) {
+      if (!lastOrderAt.has(row.customerId)) {
+        lastOrderAt.set(row.customerId, new Date(row.createdAt).toISOString());
       }
     }
   }
@@ -389,7 +368,7 @@ export async function listCustomers(params: { q?: string; page?: number }) {
   return {
     customers,
     lastOrderAt,
-    total: count ?? 0,
+    total: all.length,
     page,
     perPage: CUSTOMERS_PER_PAGE,
   };
@@ -466,18 +445,26 @@ const DAY_MS = 86_400_000;
 
 // `days = null` → todo el histórico
 export async function getStoreAnalytics(days: number | null) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      "id, created_at, total_price, total_refunded, customer_id, email, utm_source, utm_medium, utm_campaign, first_utm_source, discount_code, shipping_province, shipping_country, shipping_country_code, line_items, upsell_revenue",
-    )
-    .eq("test", false)
-    .is("cancelled_at", null)
-    .order("created_at", { ascending: true })
-    .limit(10_000);
-  if (error) throw error;
-  const all = (data ?? []) as AnalyticsOrder[];
+  const rows = await convexQuery(api.store.ordersForAnalytics, {});
+  // Llegan en orden cronológico (la agrupación por cliente depende de ello)
+  const all: AnalyticsOrder[] = rows.map((o) => ({
+    id: o.orderId,
+    created_at: new Date(o.createdAt).toISOString(),
+    total_price: o.totalPrice,
+    total_refunded: o.totalRefunded,
+    customer_id: o.customerId,
+    email: o.email,
+    utm_source: o.utmSource,
+    utm_medium: o.utmMedium,
+    utm_campaign: o.utmCampaign,
+    first_utm_source: o.firstUtmSource,
+    discount_code: o.discountCode,
+    shipping_province: o.shippingProvince,
+    shipping_country: o.shippingCountry,
+    shipping_country_code: o.shippingCountryCode,
+    line_items: o.lineItems,
+    upsell_revenue: o.upsellRevenue,
+  }));
 
   const now = Date.now();
   const startMs = days ? now - days * DAY_MS : 0;

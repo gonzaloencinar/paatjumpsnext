@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/lib/supabase/types";
+import { api } from "@/convex/_generated/api";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import {
   FINANCE_FREQUENCIES,
   FINANCE_PARTNERS,
@@ -15,11 +16,78 @@ import { MADRID_TZ, madridLocalToUtc } from "./schedule";
 // sus ingresos − sus gastos deducibles; lo de Patri no tributa) y la retiene
 // él. El beneficio neto se reparte al 50% y el saldo final dice quién
 // transfiere a quién, estilo Tricount.
+//
+// Los datos viven en Convex (convex/finance.ts); este módulo adapta los docs
+// a la forma legacy (snake_case, ISO, null) que esperan los componentes y
+// conserva toda la lógica de agregación por mes de Madrid.
 
 export type Partner = FinancePartner;
 
-export type FinanceEntry = Tables<"finance_entries">;
-export type FinanceRecurring = Tables<"finance_recurring">;
+export type FinanceEntry = {
+  id: string;
+  type: "income" | "expense";
+  concept: string;
+  amount: number;
+  partner: string;
+  entry_date: string;
+  notes: string | null;
+  recurring_id: string | null;
+  period: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FinanceRecurring = {
+  id: string;
+  type: "income" | "expense";
+  concept: string;
+  amount: number;
+  partner: "gonzalo" | "patri";
+  frequency: string;
+  day_of_month: number;
+  starts_on: string;
+  ends_on: string | null;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function entryToLegacy(doc: Doc<"finance_entries">): FinanceEntry {
+  return {
+    id: doc._id,
+    type: doc.type,
+    concept: doc.concept,
+    amount: doc.amount,
+    partner: doc.partner,
+    entry_date: doc.entryDate,
+    notes: doc.notes ?? null,
+    recurring_id: doc.recurringId ?? null,
+    period: doc.period ?? null,
+    deleted_at: null, // la query solo devuelve entradas vivas
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+  };
+}
+
+function recurringToLegacy(doc: Doc<"finance_recurring">): FinanceRecurring {
+  return {
+    id: doc._id,
+    type: doc.type,
+    concept: doc.concept,
+    amount: doc.amount,
+    partner: doc.partner,
+    frequency: doc.frequency,
+    day_of_month: doc.dayOfMonth,
+    starts_on: doc.startsOn,
+    ends_on: doc.endsOn ?? null,
+    active: doc.active,
+    notes: doc.notes ?? null,
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+  };
+}
 
 // ─────────────────────────── meses (Madrid) ───────────────────────────
 
@@ -68,22 +136,21 @@ export function monthLabel(month: string): string {
 const CHARGED_STATUSES = new Set(["paid", "partially_refunded", "refunded"]);
 
 type FinanceOrder = {
-  id: number;
-  created_at: string;
-  financial_status: string | null;
-  total_price: number | null;
-  total_tax: number | null;
-  total_refunded: number;
-  total_shipping: number | null;
+  createdAt: number;
+  financialStatus: string | null;
+  totalPrice: number | null;
+  totalTax: number | null;
+  totalRefunded: number;
+  totalShipping: number | null;
 };
 
 // Venta efectiva sin IVA: base imponible del pedido menos los reembolsos
 // prorrateados (no guardamos el desglose de impuestos de cada refund).
 function orderNetExTax(o: FinanceOrder): number {
-  const total = o.total_price ?? 0;
+  const total = o.totalPrice ?? 0;
   if (total <= 0) return 0;
-  const exTaxRatio = (total - (o.total_tax ?? 0)) / total;
-  const collected = Math.max(total - (o.total_refunded ?? 0), 0);
+  const exTaxRatio = (total - (o.totalTax ?? 0)) / total;
+  const collected = Math.max(total - (o.totalRefunded ?? 0), 0);
   return collected * exTaxRatio;
 }
 
@@ -109,10 +176,10 @@ export function shippingExpenseEntry(
 // ─────────────────────────── recurrentes ───────────────────────────
 
 type Occurrence = {
-  type: string;
+  type: "income" | "expense";
   concept: string;
   amount: number;
-  partner: string;
+  partner: "gonzalo" | "patri";
   entry_date: string;
   recurring_id: string;
   period: string;
@@ -146,10 +213,10 @@ function occurrencesFor(
 }
 
 // Inserta las ocurrencias vencidas (hasta el mes actual incluido) que falten.
-// Idempotente por el unique (recurring_id, period); los tombstones
-// (deleted_at) bloquean la re-creación de entradas borradas a propósito.
+// Idempotente por el índice (recurringId, period) — el upsert es transaccional
+// en Convex; los tombstones (deletedAt) bloquean la re-creación de entradas
+// borradas a propósito.
 export async function materializeRecurring(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   recurrings: FinanceRecurring[],
   uptoMonth: string,
 ) {
@@ -159,11 +226,17 @@ export async function materializeRecurring(
       occurrencesFor(rec, rec.starts_on.slice(0, 7), uptoMonth),
     );
   if (rows.length === 0) return;
-  const { error } = await supabase.from("finance_entries").upsert(rows, {
-    onConflict: "recurring_id,period",
-    ignoreDuplicates: true,
+  await convexMutation(api.finance.materializeRecurring, {
+    rows: rows.map((occ) => ({
+      recurringId: occ.recurring_id as Id<"finance_recurring">,
+      period: occ.period,
+      type: occ.type,
+      concept: occ.concept,
+      amount: occ.amount,
+      partner: occ.partner,
+      entryDate: occ.entry_date,
+    })),
   });
-  if (error) throw error;
 }
 
 // ─────────────────────────── cuadre ───────────────────────────
@@ -305,61 +378,38 @@ export type FinanceData = {
 export async function getFinanceData(
   requestedMonth?: string,
 ): Promise<FinanceData> {
-  const supabase = await createClient();
   const currentMonth = currentMadridMonth();
   const month =
     requestedMonth && MONTH_RE.test(requestedMonth)
       ? requestedMonth
       : currentMonth;
 
-  const [
-    { data: settings },
-    { data: recurringRows, error: recError },
-    { data: irpfRows },
-  ] = await Promise.all([
-    supabase
-      .from("finance_settings")
-      .select("irpf_pct")
-      .eq("id", true)
-      .maybeSingle(),
-    supabase
-      .from("finance_recurring")
-      .select("*")
-      .order("created_at", { ascending: true }),
-    supabase.from("finance_month_irpf").select("month, irpf_pct"),
+  const [settings, recurringDocs, irpfRows] = await Promise.all([
+    convexQuery(api.finance.settings, {}),
+    convexQuery(api.finance.recurrings, {}),
+    convexQuery(api.finance.monthIrpf, {}),
   ]);
-  if (recError) throw recError;
-  const globalIrpfPct = settings?.irpf_pct ?? 37;
-  const recurrings = recurringRows ?? [];
+  const globalIrpfPct = settings?.irpfPct ?? 37;
+  const recurrings = recurringDocs.map(recurringToLegacy);
 
   // Tipo del mes: override/cierre si hay fila, si no el global vigente
   const irpfByMonth = new Map(
-    (irpfRows ?? []).map((row) => [row.month, row.irpf_pct]),
+    irpfRows.map((row) => [row.month, row.irpfPct]),
   );
   const pctFor = (m: string) => irpfByMonth.get(m) ?? globalIrpfPct;
   const irpfPct = pctFor(month);
 
   // Materializa lo vencido antes de leer los movimientos
-  await materializeRecurring(supabase, recurrings, currentMonth);
+  await materializeRecurring(recurrings, currentMonth);
 
   const year = month.slice(0, 4);
-  const [
-    { data: entryRows, error: entriesError },
-    shopifyByMonth,
-    shippingByMonth,
-  ] = await Promise.all([
-    supabase
-      .from("finance_entries")
-      .select("*")
-      .is("deleted_at", null)
-      .gte("entry_date", `${year}-01-01`)
-      .lte("entry_date", `${year}-12-31`)
-      .order("entry_date", { ascending: true }),
-    getShopifyByMonth(supabase, year),
-    getShippingByMonth(supabase),
+  const [entryDocs, shopifyByMonth, shippingByMonth] = await Promise.all([
+    convexQuery(api.finance.entriesForYear, { year }),
+    getShopifyByMonth(year),
+    getShippingByMonth(),
   ]);
-  if (entriesError) throw entriesError;
-  const yearEntries = entryRows ?? [];
+  // La query ya devuelve solo entradas vivas del año, ordenadas por fecha
+  const yearEntries = entryDocs.map(entryToLegacy);
 
   const entries = yearEntries.filter((e) => e.entry_date.startsWith(month));
   const shopify = shopifyByMonth.get(month) ?? {
@@ -456,62 +506,38 @@ const MADRID_MONTH_FMT = new Intl.DateTimeFormat("en-CA", {
 // Cierre de meses: al cambiar el tipo global de IRPF, los meses ya pasados
 // sin fila propia se congelan con el tipo que estaba vigente — el cambio solo
 // afecta al mes en curso y siguientes.
-export async function freezePastMonthsIrpf(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  oldPct: number,
-) {
+export async function freezePastMonthsIrpf(oldPct: number) {
   const currentMonth = currentMadridMonth();
-  const [{ data: firstEntry }, { data: firstOrder }] = await Promise.all([
-    supabase
-      .from("finance_entries")
-      .select("entry_date")
-      .order("entry_date", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("orders")
-      .select("created_at")
-      .eq("test", false)
-      .is("cancelled_at", null)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const { firstEntryDate, firstOrderCreatedAt } = await convexQuery(
+    api.finance.startDates,
+    {},
+  );
   const starts = [
-    firstEntry?.entry_date?.slice(0, 7),
-    firstOrder
-      ? MADRID_MONTH_FMT.format(new Date(firstOrder.created_at)).slice(0, 7)
+    firstEntryDate?.slice(0, 7),
+    firstOrderCreatedAt !== null
+      ? MADRID_MONTH_FMT.format(new Date(firstOrderCreatedAt)).slice(0, 7)
       : undefined,
   ].filter((m): m is string => Boolean(m));
   if (starts.length === 0) return;
 
-  const rows: { month: string; irpf_pct: number }[] = [];
+  const rows: { month: string; irpfPct: number }[] = [];
   for (let m = starts.sort()[0]!; m < currentMonth; m = addMonths(m, 1)) {
-    rows.push({ month: m, irpf_pct: oldPct });
+    rows.push({ month: m, irpfPct: oldPct });
   }
   if (rows.length === 0) return;
-  const { error } = await supabase
-    .from("finance_month_irpf")
-    .upsert(rows, { onConflict: "month", ignoreDuplicates: true });
-  if (error) throw error;
+  await convexMutation(api.finance.freezeMonthsIrpf, { rows });
 }
 
 // Envíos ya pagados (sync del cron) agrupados por mes de Madrid y desglosados
 // por proveedor (Packlink PRO / Genei). Solo cuentan los estados post-compra;
 // volumen pequeño → todo en TS.
-async function getShippingByMonth(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<Map<string, ShippingByProvider>> {
-  const { data, error } = await supabase
-    .from("packlink_shipments")
-    .select("provider, cost, state, shipment_date, synced_at")
-    .limit(5000);
-  if (error) throw error;
+async function getShippingByMonth(): Promise<Map<string, ShippingByProvider>> {
+  const shipments = await convexQuery(api.finance.shipmentsForFinance, {});
 
   const map = new Map<string, ShippingByProvider>();
-  for (const shipment of data ?? []) {
+  for (const shipment of shipments) {
     if (!isPurchasedShipment(shipment.state)) continue;
-    const date = shipment.shipment_date ?? shipment.synced_at;
+    const date = shipment.shipmentDate ?? shipment.syncedAt;
     const month = MADRID_MONTH_FMT.format(new Date(date)).slice(0, 7);
     const both = map.get(month) ?? emptyShipping();
     const row = shipment.provider === "genei" ? both.genei : both.packlink;
@@ -524,42 +550,35 @@ async function getShippingByMonth(
 }
 
 // Ventas cobradas del año agrupadas por mes de Madrid (sin IVA y netas de
-// reembolsos). A la escala actual una pasada en TS es más simple que un RPC.
+// reembolsos). A la escala actual una pasada en TS es más simple que agregar
+// en la query.
 async function getShopifyByMonth(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   year: string,
 ): Promise<Map<string, ShopifySummary>> {
   const start = madridLocalToUtc(`${year}-01-01T00:00`);
   const end = madridLocalToUtc(`${Number(year) + 1}-01-01T00:00`);
-  let query = supabase
-    .from("orders")
-    .select(
-      "id, created_at, financial_status, total_price, total_tax, total_refunded, total_shipping",
-    )
-    .eq("test", false)
-    .is("cancelled_at", null)
-    .limit(10_000);
-  if (start) query = query.gte("created_at", start.toISOString());
-  if (end) query = query.lt("created_at", end.toISOString());
-  const { data, error } = await query;
-  if (error) throw error;
+  if (!start || !end) throw new Error(`Año no válido: ${year}`);
+  const orders = await convexQuery(api.finance.ordersForFinance, {
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+  });
 
   const map = new Map<string, ShopifySummary>();
-  for (const order of (data ?? []) as FinanceOrder[]) {
-    const status = order.financial_status?.toLowerCase() ?? "";
+  for (const order of orders as FinanceOrder[]) {
+    const status = order.financialStatus?.toLowerCase() ?? "";
     if (!CHARGED_STATUSES.has(status)) continue;
-    const month = MADRID_MONTH_FMT.format(new Date(order.created_at)).slice(
+    const month = MADRID_MONTH_FMT.format(new Date(order.createdAt)).slice(
       0,
       7,
     );
     const row = map.get(month) ?? { orders: 0, gross: 0, net: 0, shipping: 0 };
     row.orders += 1;
     row.gross += Math.max(
-      (order.total_price ?? 0) - (order.total_refunded ?? 0),
+      (order.totalPrice ?? 0) - (order.totalRefunded ?? 0),
       0,
     );
     row.net += orderNetExTax(order);
-    row.shipping += order.total_shipping ?? 0;
+    row.shipping += order.totalShipping ?? 0;
     map.set(month, row);
   }
   return map;

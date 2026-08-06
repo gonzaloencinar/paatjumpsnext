@@ -4,17 +4,19 @@ import { mergeName, tagStoreLinks } from "@/lib/crm/campaign-engine";
 import { CRM } from "@/lib/crm/config";
 import { formatMoney } from "@/lib/crm/format";
 import { getActiveGeneralPromotion } from "@/lib/crm/promotions";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
 import { createShopifyDiscount, hasAdminToken } from "@/lib/shopify/admin";
-import { createAdminClient } from "@/lib/supabase/admin";
-import type { Tables } from "@/lib/supabase/types";
 
 // Runner de secuencias (plan §16.4). Mismo tick del cron que las campañas:
-// reclama inscripciones vencidas con lease de 15 min (RPC skip locked), envía
-// el paso que toca y programa el siguiente. enrollment.step = índice del
-// PRÓXIMO paso a enviar dentro de la lista de pasos efectivos.
+// reclama inscripciones vencidas con lease de 15 min (mutation transaccional
+// claimDueEnrollments, el sustituto del RPC skip locked — devuelve además la
+// automatización, los pasos, el contacto y el checkout de cada inscripción),
+// envía el paso que toca y programa el siguiente. enrollment.step = índice
+// del PRÓXIMO paso a enviar dentro de la lista de pasos efectivos.
 
 const SEND_INTERVAL_MS = 600;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -121,43 +123,35 @@ function generateRecoveryCode() {
 // cliente + caducidad de 48 h. Si el contacto ya tiene uno vigente (≥6 h de
 // vida) se reusa: reintentos y carritos seguidos no acumulan códigos.
 async function resolveRecoveryDiscount(
-  supabase: ReturnType<typeof createAdminClient>,
   contactId: string,
 ): Promise<string | null> {
   const promo = await getActiveGeneralPromotion();
   if (promo) return promo.code;
 
-  const { data: existing } = await supabase
-    .from("discount_codes")
-    .select("code")
-    .eq("contact_id", contactId)
-    .eq("redeemed", false)
-    .gt("expires_at", new Date(Date.now() + 6 * 3_600_000).toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existing) return existing.code;
+  const existing = await convexQuery(api.contacts.latestDiscountCodeForContact, {
+    contactId,
+    minExpiresAt: Date.now() + 6 * 3_600_000,
+  });
+  if (existing) return existing;
 
   if (!hasAdminToken()) return null;
   const code = generateRecoveryCode();
-  const expiresAt = new Date(
-    Date.now() + DISCOUNT_TTL_HOURS * 3_600_000,
-  ).toISOString();
+  const expiresAt = Date.now() + DISCOUNT_TTL_HOURS * 3_600_000;
   const shopifyDiscountId = await createShopifyDiscount({
     title: `Recuperación de carrito · ${code}`,
     code,
     percentage: DISCOUNT_PCT,
     startsAt: new Date().toISOString(),
-    endsAt: expiresAt,
+    endsAt: new Date(expiresAt).toISOString(),
     oncePerCustomer: true,
     usageLimit: 1,
   });
-  await supabase.from("discount_codes").insert({
+  await convexMutation(api.contacts.insertDiscountCode, {
     code,
-    contact_id: contactId,
+    contactId,
     percentage: DISCOUNT_PCT,
-    expires_at: expiresAt,
-    shopify_discount_id: shopifyDiscountId,
+    expiresAt,
+    shopifyDiscountId,
   });
   return code;
 }
@@ -182,122 +176,64 @@ export async function processAutomations(
   };
   if (budget <= 0) return summary;
 
-  const supabase = createAdminClient();
-  const { data: due, error } = await supabase.rpc("claim_due_enrollments", {
-    p_limit: budget,
+  const due = await convexMutation(api.engine.claimDueEnrollments, {
+    limit: budget,
   });
-  if (error) throw error;
-  if (!due || due.length === 0) return summary;
-
-  const automationIds = [
-    ...new Set(
-      due.map((e) => e.automation_id).filter((v): v is string => v !== null),
-    ),
-  ];
-  const contactIds = [
-    ...new Set(
-      due.map((e) => e.contact_id).filter((v): v is string => v !== null),
-    ),
-  ];
-
-  const checkoutIds = [
-    ...new Set(
-      due.map((e) => e.checkout_id).filter((v): v is number => v !== null),
-    ),
-  ];
-
-  const [stepsRes, automationsRes, contactsRes, checkoutsRes] =
-    await Promise.all([
-      supabase
-        .from("automation_steps")
-        .select("*")
-        .in("automation_id", automationIds),
-      supabase.from("automations").select("id, name").in("id", automationIds),
-      supabase
-        .from("contacts")
-        .select("id, email, first_name, status")
-        .in("id", contactIds),
-      checkoutIds.length > 0
-        ? supabase
-            .from("checkouts")
-            .select(
-              "id, recovery_url, status, line_items, total_price, currency",
-            )
-            .in("id", checkoutIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-  if (stepsRes.error) throw stepsRes.error;
-  if (automationsRes.error) throw automationsRes.error;
-  if (contactsRes.error) throw contactsRes.error;
-  if (checkoutsRes.error) throw checkoutsRes.error;
-  const automationNameById = new Map(
-    (automationsRes.data ?? []).map((automation) => [
-      automation.id,
-      automation.name,
-    ]),
-  );
-  const checkoutById = new Map(
-    (checkoutsRes.data ?? []).map((checkout) => [checkout.id, checkout]),
-  );
-
-  const stepsByAutomation = new Map<string, Tables<"automation_steps">[]>(
-    automationIds.map((id) => [
-      id,
-      effectiveSteps(
-        (stepsRes.data ?? []).filter((step) => step.automation_id === id),
-      ),
-    ]),
-  );
-  const contactById = new Map(
-    (contactsRes.data ?? []).map((contact) => [contact.id, contact]),
-  );
+  if (due.length === 0) return summary;
 
   let consecutiveFailures = 0;
 
+  const cancel = (id: string) =>
+    convexMutation(api.engine.updateEnrollment, {
+      id,
+      status: "canceled",
+      nextRunAt: null,
+    });
+
   for (const enrollment of due) {
-    const contact = enrollment.contact_id
-      ? contactById.get(enrollment.contact_id)
-      : undefined;
-    const steps = enrollment.automation_id
-      ? (stepsByAutomation.get(enrollment.automation_id) ?? [])
-      : [];
+    const contact = enrollment.contact;
+    // Pasos en la forma legacy que espera effectiveSteps (pura, sin tocar)
+    const steps = effectiveSteps(
+      enrollment.steps.map((s) => ({
+        id: s.id,
+        enabled: s.enabled,
+        subject: s.subject,
+        preheader: s.preheader,
+        body_html: s.bodyHtml,
+        position: s.position,
+        delay_minutes: s.delayMinutes,
+      })),
+    );
     const step = steps[enrollment.step];
 
     // Baja/rebote/queja → fuera de la secuencia
     if (!contact || contact.status !== "subscribed") {
-      await supabase
-        .from("automation_enrollments")
-        .update({ status: "canceled", next_run_at: null })
-        .eq("id", enrollment.id);
+      await cancel(enrollment.id);
       summary.canceled += 1;
       continue;
     }
 
     // Recuperación de carrito: si el checkout ya convirtió, desapareció o el
     // cliente lo vació, no hay nada que recuperar
-    const checkout = enrollment.checkout_id
-      ? checkoutById.get(enrollment.checkout_id)
-      : null;
+    const checkout = enrollment.checkout;
     const checkoutEmptied =
-      Array.isArray(checkout?.line_items) && checkout.line_items.length === 0;
+      Array.isArray(checkout?.lineItems) && checkout.lineItems.length === 0;
     if (
-      enrollment.checkout_id &&
+      enrollment.hasCheckout &&
       (!checkout || checkout.status !== "abandoned" || checkoutEmptied)
     ) {
-      await supabase
-        .from("automation_enrollments")
-        .update({ status: "canceled", next_run_at: null })
-        .eq("id", enrollment.id);
+      await cancel(enrollment.id);
       summary.canceled += 1;
       continue;
     }
 
     // No queda paso que enviar (borrados/desactivados después de inscribir)
     if (!step) {
-      await supabase
-        .from("automation_enrollments")
-        .update({ status: "completed", next_run_at: null })
-        .eq("id", enrollment.id);
+      await convexMutation(api.engine.updateEnrollment, {
+        id: enrollment.id,
+        status: "completed",
+        nextRunAt: null,
+      });
       summary.completed += 1;
       continue;
     }
@@ -311,7 +247,7 @@ export async function processAutomations(
       );
       let discountCode: string | null = null;
       if (usesDiscount) {
-        discountCode = await resolveRecoveryDiscount(supabase, contact.id);
+        discountCode = await resolveRecoveryDiscount(contact.id);
         if (!discountCode) {
           throw new Error(
             "sin código de descuento resoluble (¿SHOPIFY_ADMIN_API_TOKEN?)",
@@ -323,12 +259,12 @@ export async function processAutomations(
       // la web) — se resuelve siempre para que el tag nunca llegue al email.
       // Con código, el enlace lo lleva puesto: `discount` lo auto-aplica el
       // checkout de Shopify; `code` lo aplica nuestra tienda (pj_discount).
-      let cartUrl = checkout?.recovery_url ?? `${CRM.baseUrl}/cart`;
+      let cartUrl = checkout?.recoveryUrl ?? `${CRM.baseUrl}/cart`;
       if (discountCode) {
         try {
           const url = new URL(cartUrl);
           url.searchParams.set(
-            checkout?.recovery_url ? "discount" : "code",
+            checkout?.recoveryUrl ? "discount" : "code",
             discountCode,
           );
           cartUrl = url.toString();
@@ -338,14 +274,20 @@ export async function processAutomations(
       }
 
       const mergeAll = (text: string) =>
-        mergeName(text, contact.first_name)
+        mergeName(text, contact.firstName)
           .replace(/\{\{\s*url_carrito\s*\}\}/gi, cartUrl)
           .replace(/\{\{\s*codigo_descuento\s*\}\}/gi, discountCode ?? "");
 
       // {{productos_carrito}} → resumen del carrito. Sin el tag, el resumen se
       // añade solo al final del email (los emails de carrito siempre lo llevan);
       // en asunto/preheader el tag se elimina sin más.
-      const cartHtml = checkout ? cartSummaryHtml(checkout) : "";
+      const cartHtml = checkout
+        ? cartSummaryHtml({
+            line_items: checkout.lineItems,
+            total_price: checkout.totalPrice,
+            currency: checkout.currency,
+          })
+        : "";
       let bodyHtml = mergeAll(step.body_html ?? "");
       if (/\{\{\s*productos_carrito\s*\}\}/i.test(bodyHtml)) {
         bodyHtml = bodyHtml.replace(
@@ -360,9 +302,7 @@ export async function processAutomations(
       // nombre de la automatización) + ?pj= para re-identificar al volver
       bodyHtml = tagStoreLinks(
         bodyHtml,
-        (enrollment.automation_id
-          ? automationNameById.get(enrollment.automation_id)
-          : null) ?? "automatizacion",
+        enrollment.automationName || "automatizacion",
         contact.email,
       );
 
@@ -379,51 +319,40 @@ export async function processAutomations(
         }),
         template: "automation_step",
         contactId: contact.id,
-        automationId: enrollment.automation_id,
+        automationId: enrollment.automationId,
         automationStepId: step.id,
-        checkoutId: enrollment.checkout_id,
+        checkoutId: checkout?.checkoutId ?? null, // id legacy de Shopify
         // Determinista por inscripción+paso: el reintento del lease no duplica
         idempotencyKey: `automation:${enrollment.id}:step:${enrollment.step}`,
       });
 
       if ("skipped" in result) {
         // En supresiones → cancelar la inscripción entera
-        await supabase
-          .from("automation_enrollments")
-          .update({ status: "canceled", next_run_at: null })
-          .eq("id", enrollment.id);
+        await cancel(enrollment.id);
         summary.skipped += 1;
       } else {
         summary.sent += 1;
         // Primer email de recuperación de este checkout → sella
         // recovery_sent_at (base de la métrica "recuperados" del webhook)
-        if (enrollment.checkout_id && enrollment.step === 0) {
-          await supabase
-            .from("checkouts")
-            .update({ recovery_sent_at: new Date().toISOString() })
-            .eq("id", enrollment.checkout_id)
-            .is("recovery_sent_at", null);
+        if (checkout && enrollment.step === 0) {
+          await convexMutation(api.engine.sealRecoverySent, {
+            checkoutId: checkout.id,
+          });
         }
         const next = steps[enrollment.step + 1];
         if (next) {
-          await supabase
-            .from("automation_enrollments")
-            .update({
-              step: enrollment.step + 1,
-              next_run_at: new Date(
-                Date.now() + next.delay_minutes * 60_000,
-              ).toISOString(),
-            })
-            .eq("id", enrollment.id);
+          await convexMutation(api.engine.updateEnrollment, {
+            id: enrollment.id,
+            step: enrollment.step + 1,
+            nextRunAt: Date.now() + next.delay_minutes * 60_000,
+          });
         } else {
-          await supabase
-            .from("automation_enrollments")
-            .update({
-              step: enrollment.step + 1,
-              status: "completed",
-              next_run_at: null,
-            })
-            .eq("id", enrollment.id);
+          await convexMutation(api.engine.updateEnrollment, {
+            id: enrollment.id,
+            step: enrollment.step + 1,
+            status: "completed",
+            nextRunAt: null,
+          });
           summary.completed += 1;
         }
       }
@@ -442,86 +371,4 @@ export async function processAutomations(
   }
 
   return summary;
-}
-
-// Inscribe un checkout (real de Shopify o carrito sintético del storefront)
-// en la secuencia de recuperación de carrito, y reinicia el reloj del paso 0
-// en cada toque: mientras el cliente siga activo, aún no está "abandonado".
-// Lo usan el webhook de checkouts y el tracking del carrito de la app.
-export async function enrollCheckoutInCartRecovery(
-  supabase: ReturnType<typeof createAdminClient>,
-  contactId: string,
-  checkoutId: number,
-) {
-  const { data: automation } = await supabase
-    .from("automations")
-    .select("id, enabled, automation_steps(*)")
-    .eq("key", "cart_recovery")
-    .maybeSingle();
-  if (!automation?.enabled) return;
-  const [first] = effectiveSteps(automation.automation_steps ?? []);
-  if (!first) return;
-
-  const nextRunAt = new Date(
-    Date.now() + first.delay_minutes * 60_000,
-  ).toISOString();
-
-  // Nueva inscripción (ignora si ya existe para este checkout)…
-  await supabase.from("automation_enrollments").upsert(
-    {
-      automation_id: automation.id,
-      contact_id: contactId,
-      checkout_id: checkoutId,
-      step: 0,
-      status: "active",
-      next_run_at: nextRunAt,
-    },
-    { ignoreDuplicates: true },
-  );
-
-  // …y si sigue en el paso 0 sin enviar, cada toque reinicia el reloj
-  await supabase
-    .from("automation_enrollments")
-    .update({ next_run_at: nextRunAt })
-    .eq("automation_id", automation.id)
-    .eq("checkout_id", checkoutId)
-    .eq("status", "active")
-    .eq("step", 0);
-}
-
-// Alta nueva (o re-suscripción) → inscribir en las secuencias de trigger
-// 'signup' activas con al menos un paso efectivo. El primer envío se programa
-// a alta + delay del paso 1 (el D0 con el código lo manda /api/subscribe).
-export async function enrollContactInSignupAutomations(contactId: string) {
-  const supabase = createAdminClient();
-  const { data: automations } = await supabase
-    .from("automations")
-    .select("id, automation_steps(*)")
-    .eq("trigger", "signup")
-    .eq("enabled", true);
-
-  for (const automation of automations ?? []) {
-    const [first] = effectiveSteps(automation.automation_steps ?? []);
-    if (!first) continue;
-    // on conflict do nothing → respeta el índice parcial de "una inscripción
-    // activa por automatización+contacto"
-    const { error } = await supabase.from("automation_enrollments").upsert(
-      {
-        automation_id: automation.id,
-        contact_id: contactId,
-        step: 0,
-        status: "active",
-        next_run_at: new Date(
-          Date.now() + first.delay_minutes * 60_000,
-        ).toISOString(),
-      },
-      { ignoreDuplicates: true },
-    );
-    if (error) {
-      console.error(
-        `[automations] no se pudo inscribir ${contactId} en ${automation.id}`,
-        error,
-      );
-    }
-  }
 }

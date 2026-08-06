@@ -1,6 +1,7 @@
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { createOrderFulfillment } from "@/lib/shopify/admin";
-import { createAdminClient } from "@/lib/supabase/admin";
-import type { Json, TablesInsert } from "@/lib/supabase/types";
 import {
   geneiLabelRoute,
   getGeneiLabelPdf,
@@ -37,6 +38,29 @@ const NOT_PURCHASED = new Set([
 ]);
 
 type RawShipment = Record<string, unknown>;
+
+// Fila que consume la mutation de upsert del sync (null = borrar el campo;
+// homeToHome/collectionDate/collectionTime se conservan en Convex si vienen
+// a null y la fila ya existía)
+type SyncRow = {
+  reference: string;
+  tracking: string | null;
+  trackingUrl: string | null;
+  labelUrl: string | null;
+  customReference: string | null;
+  state: string | null;
+  carrier: string | null;
+  service: string | null;
+  serviceId: string | null;
+  collectionDate: string | null;
+  collectionTime: string | null;
+  estimatedDeliveryDate: string | null;
+  homeToHome: boolean | null;
+  cost: number | null;
+  currency: string | null;
+  shipmentDate: number | null;
+  raw: RawShipment;
+};
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -88,7 +112,8 @@ function extractCost(raw: RawShipment): {
   return { cost: null, currency: null };
 }
 
-function extractDate(raw: RawShipment): string | null {
+// Fecha del envío → ms epoch (columna timestamptz legacy)
+function extractDate(raw: RawShipment): number | null {
   // Formato real observado: orderDate "2026/07/06" (module_shopify)
   const candidates = [
     raw.orderDate,
@@ -104,12 +129,12 @@ function extractDate(raw: RawShipment): string | null {
       // epoch en segundos o ms
       const ms = candidate > 1e12 ? candidate : candidate * 1000;
       const date = new Date(ms);
-      if (!Number.isNaN(date.getTime())) return date.toISOString();
+      if (!Number.isNaN(date.getTime())) return date.getTime();
     }
     const asString = str(candidate);
     if (asString) {
       const date = new Date(asString);
-      if (!Number.isNaN(date.getTime())) return date.toISOString();
+      if (!Number.isNaN(date.getTime())) return date.getTime();
     }
   }
   return null;
@@ -154,7 +179,7 @@ function extractHomeToHome(raw: RawShipment): boolean | null {
   return !origin && !destination;
 }
 
-function toRow(raw: RawShipment): TablesInsert<"packlink_shipments"> | null {
+function toRow(raw: RawShipment): SyncRow | null {
   const reference = firstString(raw, [
     "packlink_reference",
     "reference",
@@ -169,9 +194,9 @@ function toRow(raw: RawShipment): TablesInsert<"packlink_shipments"> | null {
   return {
     reference,
     tracking: extractTracking(raw),
-    tracking_url: firstString(raw, ["tracking_url"]),
-    label_url: extractLabel(raw),
-    custom_reference: firstString(raw, [
+    trackingUrl: firstString(raw, ["tracking_url"]),
+    labelUrl: extractLabel(raw),
+    customReference: firstString(raw, [
       "shipment_custom_reference",
       "custom_reference",
       "customReference",
@@ -180,21 +205,53 @@ function toRow(raw: RawShipment): TablesInsert<"packlink_shipments"> | null {
     state,
     carrier: firstString(raw, ["carrier"]),
     service: firstString(raw, ["service"]),
-    service_id: str(raw.service_id),
-    collection_date: isoDate(raw.collection_date ?? raw.collectionDate),
-    collection_time: str(raw.collection_time),
-    estimated_delivery_date: isoDate(raw.estimated_delivery_date),
-    home_to_home: extractHomeToHome(raw),
+    serviceId: str(raw.service_id),
+    collectionDate: isoDate(raw.collection_date ?? raw.collectionDate),
+    collectionTime: str(raw.collection_time),
+    estimatedDeliveryDate: isoDate(raw.estimated_delivery_date),
+    homeToHome: extractHomeToHome(raw),
     cost,
     currency,
-    shipment_date: extractDate(raw),
-    raw: raw as Json,
-    synced_at: new Date().toISOString(),
+    shipmentDate: extractDate(raw),
+    raw,
   };
 }
 
 export function isPurchasedShipment(state: string | null): boolean {
   return !NOT_PURCHASED.has((state ?? "").toUpperCase());
+}
+
+// ─────────────── etiqueta Genei → Convex File Storage ───────────────
+
+// Sube el PDF (que la API de Genei solo da en base64) con el patrón
+// upload-URL y lo engancha al envío (labelStorageId). El route handler
+// /api/admin/genei-label/[reference] lo sirve después desde File Storage.
+export async function storeGeneiLabel(
+  reference: string,
+  pdf: Uint8Array,
+): Promise<boolean> {
+  try {
+    const uploadUrl = await convexMutation(
+      api.shipments.generateLabelUploadUrl,
+      {},
+    );
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/pdf" },
+      body: new Blob([pdf as BlobPart]),
+    });
+    if (!response.ok) {
+      throw new Error(`upload ${response.status}: ${await response.text()}`);
+    }
+    const { storageId } = (await response.json()) as {
+      storageId: Id<"_storage">;
+    };
+    await convexMutation(api.shipments.attachLabel, { reference, storageId });
+    return true;
+  } catch (error) {
+    console.warn(`[genei] etiqueta ${reference}`, error);
+    return false;
+  }
 }
 
 async function fetchPage(page: number): Promise<{
@@ -242,7 +299,6 @@ export async function syncPacklinkShipments(): Promise<{
   synced: number;
   skipped: number;
 }> {
-  const supabase = createAdminClient();
   let synced = 0;
   let skipped = 0;
   const seen = new Set<string>();
@@ -255,7 +311,7 @@ export async function syncPacklinkShipments(): Promise<{
       break;
     }
 
-    const rows: TablesInsert<"packlink_shipments">[] = [];
+    const rows: SyncRow[] = [];
     for (const shipment of shipments) {
       let row = toRow(shipment);
       if (!row) {
@@ -279,26 +335,9 @@ export async function syncPacklinkShipments(): Promise<{
     }
 
     if (rows.length > 0) {
-      // Los campos cotizados desde el CRM (price_base/price_total no van en
-      // el upsert) y home_to_home/recogida se conservan si la API no los trae
-      const references = rows.map((r) => r.reference);
-      const { data: existing } = await supabase
-        .from("packlink_shipments")
-        .select("reference, home_to_home, collection_date, collection_time")
-        .in("reference", references);
-      const byRef = new Map((existing ?? []).map((r) => [r.reference, r]));
-      for (const row of rows) {
-        const prev = byRef.get(row.reference);
-        if (!prev) continue;
-        row.home_to_home = row.home_to_home ?? prev.home_to_home;
-        row.collection_date = row.collection_date ?? prev.collection_date;
-        row.collection_time = row.collection_time ?? prev.collection_time;
-      }
-
-      const { error } = await supabase
-        .from("packlink_shipments")
-        .upsert(rows, { onConflict: "reference" });
-      if (error) throw error;
+      // La mutation conserva price_base/price_total (no van en el sync) y
+      // home_to_home/recogida cuando la API no los trae
+      await convexMutation(api.shipments.syncUpsertPacklink, { rows });
       synced += rows.length;
     }
 
@@ -313,21 +352,16 @@ export async function syncPacklinkShipments(): Promise<{
   // Packlink — los envíos Genei viven en la misma tabla; los comprados se
   // conservan como histórico para Finanzas).
   if (fullSweep) {
-    const { data: stale } = await supabase
-      .from("packlink_shipments")
-      .select("reference, state")
-      .eq("provider", "packlink")
-      .limit(1000);
-    const gone = (stale ?? []).filter(
+    const stale = await convexQuery(api.shipments.packlinkRefs, {});
+    const gone = stale.filter(
       (row) =>
         !seen.has(row.reference) &&
         NOT_PURCHASED.has((row.state ?? "").toUpperCase()),
     );
     for (const row of gone) {
-      await supabase
-        .from("packlink_shipments")
-        .delete()
-        .eq("reference", row.reference);
+      await convexMutation(api.shipments.deleteShipment, {
+        reference: row.reference,
+      });
     }
   }
 
@@ -349,15 +383,10 @@ const GENEI_FINAL_STATES = new Set([
 // recorrer: se refresca el detalle de las filas provider=genei no finales
 // (estado, tracking, coste real sin IVA y etiqueta). Volumen pequeño.
 export async function syncGeneiShipments(): Promise<{ synced: number }> {
-  const supabase = createAdminClient();
-  const { data: rows } = await supabase
-    .from("packlink_shipments")
-    .select("reference, state, tracking_url, label_url, price_base, raw")
-    .eq("provider", "genei")
-    .limit(500);
+  const rows = await convexQuery(api.shipments.geneiForSync, {});
 
   let synced = 0;
-  for (const row of rows ?? []) {
+  for (const row of rows) {
     if (GENEI_FINAL_STATES.has((row.state ?? "").toUpperCase())) continue;
     let detail: Record<string, unknown>;
     try {
@@ -369,71 +398,52 @@ export async function syncGeneiShipments(): Promise<{ synced: number }> {
     const parsed = parseGeneiDetail(detail);
     const purchased = parsed.state !== "DRAFT";
     const trackingUrl =
-      row.tracking_url ??
+      row.trackingUrl ??
       parsed.trackingUrl ??
       (parsed.tracking ? await getGeneiTrackingUrl(row.reference) : null);
-    const labelUrl =
-      row.label_url ??
-      (purchased && (await getGeneiLabelPdf(row.reference))
-        ? geneiLabelRoute(row.reference)
-        : null);
+
+    // Etiqueta: si aún no está en File Storage, se descarga (base64) y se
+    // sube; label_url apunta siempre al route handler del admin
+    let labelUrl = row.labelUrl;
+    if (purchased && !row.hasStoredLabel) {
+      const pdf = await getGeneiLabelPdf(row.reference);
+      if (pdf && (await storeGeneiLabel(row.reference, pdf))) {
+        labelUrl = geneiLabelRoute(row.reference);
+      }
+    }
+
     const transactionId = (row.raw as { genei_transaction_id?: number } | null)
       ?.genei_transaction_id;
 
-    await supabase
-      .from("packlink_shipments")
-      .update({
-        state: parsed.state,
-        tracking: parsed.tracking,
-        tracking_url: trackingUrl,
-        label_url: labelUrl,
-        cost: purchased ? (parsed.costBase ?? row.price_base) : null,
-        collection_date: parsed.collectionDate ?? undefined,
-        collection_time: parsed.collectionTime ?? undefined,
-        raw: {
-          ...(detail as Record<string, Json>),
-          ...(transactionId != null
-            ? { genei_transaction_id: transactionId }
-            : {}),
-          created_by: "crm",
-        } as Json,
-        synced_at: new Date().toISOString(),
-      })
-      .eq("reference", row.reference);
+    await convexMutation(api.shipments.updateShipment, {
+      reference: row.reference,
+      state: parsed.state,
+      tracking: parsed.tracking,
+      trackingUrl,
+      labelUrl,
+      cost: purchased ? (parsed.costBase ?? row.priceBase) : null,
+      // clave ausente = conservar la recogida ya guardada
+      ...(parsed.collectionDate !== null
+        ? { collectionDate: parsed.collectionDate }
+        : {}),
+      ...(parsed.collectionTime !== null
+        ? { collectionTime: parsed.collectionTime }
+        : {}),
+      raw: {
+        ...detail,
+        ...(transactionId != null
+          ? { genei_transaction_id: transactionId }
+          : {}),
+        created_by: "crm",
+      },
+      syncedAt: Date.now(),
+    });
     synced += 1;
   }
   return { synced };
 }
 
 // ─────────────── enlace con pedidos y fulfillment en Shopify ───────────────
-
-type Supabase = ReturnType<typeof createAdminClient>;
-
-async function linkShipmentsToOrders(supabase: Supabase) {
-  const { data: unlinked } = await supabase
-    .from("packlink_shipments")
-    .select("reference, custom_reference")
-    .is("order_id", null)
-    .not("custom_reference", "is", null)
-    .limit(500);
-  if (!unlinked || unlinked.length === 0) return;
-
-  const names = [...new Set(unlinked.map((s) => s.custom_reference!))];
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, name")
-    .in("name", names);
-  const byName = new Map((orders ?? []).map((o) => [o.name, o.id]));
-
-  for (const shipment of unlinked) {
-    const orderId = byName.get(shipment.custom_reference!);
-    if (orderId == null) continue;
-    await supabase
-      .from("packlink_shipments")
-      .update({ order_id: orderId })
-      .eq("reference", shipment.reference);
-  }
-}
 
 // Envíos con etiqueta comprada y tracking → fulfillment en Shopify (con
 // notificación al cliente) + pedido marcado como enviado en el CRM. Cada
@@ -443,45 +453,35 @@ export async function pushPacklinkFulfillments(): Promise<{
   fulfilled: number;
   errors: number;
 }> {
-  const supabase = createAdminClient();
-  await linkShipmentsToOrders(supabase);
+  // custom_reference ("#1011") ↔ orders.name → order_id (id de Shopify)
+  await convexMutation(api.shipments.linkShipmentsToOrders, {});
 
-  const { data: candidates } = await supabase
-    .from("packlink_shipments")
-    .select("reference, order_id, state, carrier, tracking, tracking_url")
-    .is("fulfillment_synced_at", null)
-    .not("order_id", "is", null)
-    .not("tracking", "is", null)
-    .limit(100);
+  const candidates = await convexQuery(api.shipments.fulfillmentCandidates, {});
 
   let fulfilled = 0;
   let errors = 0;
-  for (const shipment of candidates ?? []) {
+  for (const shipment of candidates) {
     if (!isPurchasedShipment(shipment.state)) continue;
-    const { data: order } = await supabase
-      .from("orders")
-      .select("id, fulfillment_status, cancelled_at")
-      .eq("id", shipment.order_id!)
-      .maybeSingle();
+    const order = await convexQuery(api.shipments.orderFulfillmentInfo, {
+      orderId: shipment.orderId,
+    });
     if (!order) continue;
 
     try {
-      if (order.fulfillment_status !== "fulfilled" && !order.cancelled_at) {
-        await createOrderFulfillment(order.id, {
-          number: shipment.tracking!,
+      if (order.fulfillmentStatus !== "fulfilled" && !order.cancelledAt) {
+        await createOrderFulfillment(order.orderId, {
+          number: shipment.tracking,
           company: shipment.carrier,
-          url: shipment.tracking_url,
+          url: shipment.trackingUrl,
         });
-        await supabase
-          .from("orders")
-          .update({ fulfillment_status: "fulfilled" })
-          .eq("id", order.id);
+        await convexMutation(api.shipments.markOrderFulfilled, {
+          orderId: order.orderId,
+        });
         fulfilled += 1;
       }
-      await supabase
-        .from("packlink_shipments")
-        .update({ fulfillment_synced_at: new Date().toISOString() })
-        .eq("reference", shipment.reference);
+      await convexMutation(api.shipments.markFulfillmentSynced, {
+        reference: shipment.reference,
+      });
     } catch (error) {
       errors += 1;
       console.error(`[packlink-sync] fulfillment ${shipment.reference}`, error);

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { verifyEmailToken } from "@/lib/email/tokens";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 // Baja en 1 clic (plan §11): GET desde el link del email (muestra página),
 // POST para One-Click de Gmail/Yahoo (RFC 8058, cabecera List-Unsubscribe-Post).
+// La supresión, el estado del contacto y el evento van en una sola mutation.
 
 function emailFromRequest(request: Request): string | null {
   const url = new URL(request.url);
@@ -20,24 +22,7 @@ function emailFromRequest(request: Request): string | null {
 }
 
 async function unsubscribe(email: string) {
-  const supabase = createAdminClient();
-  await supabase.from("suppressions").upsert({ email, reason: "unsubscribe" });
-  const { data: contact } = await supabase
-    .from("contacts")
-    .select("id, status")
-    .eq("email", email)
-    .maybeSingle();
-  if (contact && contact.status !== "unsubscribed") {
-    await supabase
-      .from("contacts")
-      .update({ status: "unsubscribed" })
-      .eq("id", contact.id);
-    await supabase.from("events").insert({
-      contact_id: contact.id,
-      type: "unsubscribed",
-      payload: { via: "link" },
-    });
-  }
+  await convexMutation(api.contacts.unsubscribeByEmail, { email });
 }
 
 const PAGE = `<!doctype html>

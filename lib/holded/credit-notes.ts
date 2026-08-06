@@ -17,7 +17,8 @@
 // calcula Holded (±0,02 €) y solo entonces se aprueba; si no cuadra se borra
 // el borrador y queda en error para revisión manual.
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { hasHoldedKey, holdedFetch } from "./client";
 import {
   ensureContact,
@@ -340,8 +341,20 @@ type HoldedDoc = {
   tax: string;
 };
 
-function supa() {
-  return createAdminClient();
+// Patch de la fila de estado (convención de convex/billing.ts: clave ausente
+// = no tocar, null = borrar; updatedAt lo sella la mutation)
+type CreditNotePatch = {
+  status?: string;
+  error?: string | null;
+  holdedId?: string;
+  documentNumber?: string | null;
+  total?: number;
+  tax?: number;
+  attempts?: number;
+};
+
+async function saveCreditNoteRow(refundId: string, patch: CreditNotePatch) {
+  await convexMutation(api.billing.updateCreditNote, { refundId, ...patch });
 }
 
 // Emite las rectificativas que falten para un pedido (una por refund).
@@ -350,13 +363,8 @@ export async function issueCreditNotesForOrder(
   orderId: number,
 ): Promise<CreditNoteResult[]> {
   if (!hasHoldedKey()) return [];
-  const db = supa();
 
-  const { data: invoice } = await db
-    .from("order_invoices")
-    .select("status, document_number")
-    .eq("order_id", orderId)
-    .maybeSingle();
+  const invoice = await convexQuery(api.billing.invoiceByOrderId, { orderId });
   // Sin ticket emitido no hay nada que rectificar (si la devolución llegó
   // antes de facturar, el pedido queda skipped y no se factura).
   if (invoice?.status !== "created") return [];
@@ -370,21 +378,18 @@ export async function issueCreditNotesForOrder(
     const expectedTotal = money(refund.totalRefundedSet);
     if (expectedTotal <= 0) continue;
 
-    const { data: existing } = await db
-      .from("order_credit_notes")
-      .select("status, holded_id, attempts")
-      .eq("refund_id", refundId)
-      .maybeSingle();
+    const existing = await convexQuery(api.billing.creditNoteByRefundId, {
+      refundId,
+    });
     if (existing?.status === "created" || existing?.status === "skipped") {
       continue;
     }
     if (existing && existing.attempts >= MAX_ATTEMPTS) continue;
-    if (existing?.holded_id) continue; // creado a medias: revisar a mano
+    if (existing?.holdedId) continue; // creado a medias: revisar a mano
     if (!existing) {
-      await db.from("order_credit_notes").insert({
-        refund_id: refundId,
-        order_id: orderId,
-        status: "pending",
+      await convexMutation(api.billing.insertPendingCreditNote, {
+        refundId,
+        orderId,
       });
     }
 
@@ -414,7 +419,7 @@ export async function issueCreditNotesForOrder(
         body: {
           contact_id: contactId,
           contact_name: contactName,
-          description: `Rectificativa del ticket ${invoice.document_number ?? "?"} — devolución pedido Shopify ${order.name}`,
+          description: `Rectificativa del ticket ${invoice.documentNumber ?? "?"} — devolución pedido Shopify ${order.name}`,
           notes: `shopify_order_id:${orderId} shopify_refund_id:${refundId}`,
           date: madridDate(refund.createdAt),
           currency: order.currencyCode,
@@ -457,18 +462,14 @@ export async function issueCreditNotesForOrder(
       const approved = await holdedFetch<HoldedDoc>(
         `/credit-notes/${created.id}`,
       );
-      await db
-        .from("order_credit_notes")
-        .update({
-          status: "created",
-          holded_id: created.id,
-          document_number: approved.document_number,
-          total,
-          tax,
-          error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("refund_id", refundId);
+      await saveCreditNoteRow(refundId, {
+        status: "created",
+        holdedId: created.id,
+        documentNumber: approved.document_number,
+        total,
+        tax,
+        error: null,
+      });
       results.push({
         orderId,
         refundId,
@@ -478,15 +479,11 @@ export async function issueCreditNotesForOrder(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await db
-        .from("order_credit_notes")
-        .update({
-          status: "error",
-          error: message.slice(0, 500),
-          attempts: (existing?.attempts ?? 0) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("refund_id", refundId);
+      await saveCreditNoteRow(refundId, {
+        status: "error",
+        error: message.slice(0, 500),
+        attempts: (existing?.attempts ?? 0) + 1,
+      });
       results.push({
         orderId,
         refundId,
@@ -505,53 +502,35 @@ export async function reconcileRefundCreditNotes(
   limit = 10,
 ): Promise<CreditNoteResult[]> {
   if (!hasHoldedKey()) return [];
-  const db = supa();
 
-  const { data: invoiced } = await db
-    .from("order_invoices")
-    .select("order_id")
-    .eq("status", "created");
-  const invoicedIds = (invoiced ?? []).map((i) => i.order_id);
-  if (invoicedIds.length === 0) return [];
-
-  const { data: refunded } = await db
-    .from("orders")
-    .select("id, total_refunded")
-    .in("id", invoicedIds)
-    .gt("total_refunded", 0);
-  if (!refunded || refunded.length === 0) return [];
+  // Pedidos facturados con totalRefunded > 0 + sus abonos (convex/billing.ts)
+  const { orders: refunded, notes } = await convexQuery(
+    api.billing.refundReconciliationCandidates,
+    {},
+  );
+  if (refunded.length === 0) return [];
 
   // Descarta pedidos cuyas rectificativas ya cubren lo devuelto
-  const { data: notes } = await db
-    .from("order_credit_notes")
-    .select("order_id, status, total, attempts")
-    .in(
-      "order_id",
-      refunded.map((o) => o.id),
-    );
   const credited = new Map<number, number>();
   const exhausted = new Set<number>();
-  for (const n of notes ?? []) {
+  for (const n of notes) {
     if (n.status === "created") {
-      credited.set(
-        n.order_id,
-        (credited.get(n.order_id) ?? 0) + (n.total ?? 0),
-      );
+      credited.set(n.orderId, (credited.get(n.orderId) ?? 0) + (n.total ?? 0));
     } else if (n.status === "error" && n.attempts >= MAX_ATTEMPTS) {
-      exhausted.add(n.order_id);
+      exhausted.add(n.orderId);
     }
   }
   const pending = refunded
     .filter(
       (o) =>
-        !exhausted.has(o.id) &&
-        (credited.get(o.id) ?? 0) < (o.total_refunded ?? 0) - 0.02,
+        !exhausted.has(o.orderId) &&
+        (credited.get(o.orderId) ?? 0) < o.totalRefunded - 0.02,
     )
     .slice(0, limit);
 
   const results: CreditNoteResult[] = [];
   for (const o of pending) {
-    results.push(...(await issueCreditNotesForOrder(o.id)));
+    results.push(...(await issueCreditNotesForOrder(o.orderId)));
   }
   return results;
 }

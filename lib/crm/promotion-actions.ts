@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import {
   createShopifyDiscount,
   deleteShopifyDiscount,
@@ -13,7 +15,7 @@ import { requireAdmin } from "./actions";
 import { PROMOTIONS_TAG } from "./promotions";
 
 // Promociones CRM ↔ Shopify. Si falta SHOPIFY_ADMIN_API_TOKEN se guarda igual
-// en Supabase y la promo queda "sin sincronizar" (aviso al usuario); el resto
+// en Convex y la promo queda "sin sincronizar" (aviso al usuario); el resto
 // de la app funciona.
 
 export type PromotionActionState = {
@@ -104,11 +106,26 @@ function discountFields(p: ParsedPromotion): DiscountFields {
   };
 }
 
+// Forma legacy del formulario (snake_case, ISO, null) → campos camelCase/ms
+// epoch de Convex. Claves opcionales siempre presentes: undefined borra.
+function convexFields(p: ParsedPromotion) {
+  return {
+    type: p.type,
+    name: p.name,
+    code: p.code,
+    percentage: p.percentage,
+    startsAt: new Date(p.starts_at).getTime(),
+    endsAt: p.ends_at ? new Date(p.ends_at).getTime() : undefined,
+    affiliateName: p.affiliate_name ?? undefined,
+    affiliateCommissionPct: p.affiliate_commission_pct ?? undefined,
+  };
+}
+
 export async function createPromotion(
   _prev: PromotionActionState,
   formData: FormData,
 ): Promise<PromotionActionState> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
   const parsed = parseForm(formData);
   if ("error" in parsed) return parsed;
 
@@ -126,20 +143,11 @@ export async function createPromotion(
     warning = NO_SYNC_WARNING;
   }
 
-  const { error } = await supabase.from("promotions").insert({
-    ...parsed,
-    active: true,
-    announce: false,
-    shopify_discount_id: shopifyDiscountId,
+  const result = await convexMutation(api.promotions.create, {
+    ...convexFields(parsed),
+    shopifyDiscountId: shopifyDiscountId ?? undefined,
   });
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? "Ya existe una promoción con ese código."
-          : "No se pudo guardar la promoción.",
-    };
-  }
+  if (result.error) return { error: result.error };
 
   updateTag(PROMOTIONS_TAG);
   revalidatePath("/admin/promotions");
@@ -151,18 +159,14 @@ export async function updatePromotion(
   _prev: PromotionActionState,
   formData: FormData,
 ): Promise<PromotionActionState> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
   const parsed = parseForm(formData);
   if ("error" in parsed) return parsed;
 
-  const { data: current } = await supabase
-    .from("promotions")
-    .select("id, shopify_discount_id")
-    .eq("id", promotionId)
-    .maybeSingle();
+  const current = await convexQuery(api.promotions.get, { id: promotionId });
   if (!current) return { error: "La promoción no existe." };
 
-  let shopifyDiscountId = current.shopify_discount_id;
+  let shopifyDiscountId = current.shopifyDiscountId;
   let warning: string | undefined;
   if (hasAdminToken()) {
     try {
@@ -181,18 +185,12 @@ export async function updatePromotion(
     warning = NO_SYNC_WARNING;
   }
 
-  const { error } = await supabase
-    .from("promotions")
-    .update({ ...parsed, shopify_discount_id: shopifyDiscountId })
-    .eq("id", promotionId);
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? "Ya existe una promoción con ese código."
-          : "No se pudo guardar la promoción.",
-    };
-  }
+  const result = await convexMutation(api.promotions.update, {
+    id: promotionId,
+    ...convexFields(parsed),
+    shopifyDiscountId: shopifyDiscountId ?? undefined,
+  });
+  if (result.error) return { error: result.error };
 
   updateTag(PROMOTIONS_TAG);
   revalidatePath("/admin/promotions");
@@ -203,18 +201,14 @@ export async function togglePromotionActive(
   promotionId: string,
   active: boolean,
 ): Promise<PromotionActionState> {
-  const supabase = await requireAdmin();
-  const { data: promotion } = await supabase
-    .from("promotions")
-    .select("id, shopify_discount_id")
-    .eq("id", promotionId)
-    .maybeSingle();
+  await requireAdmin();
+  const promotion = await convexQuery(api.promotions.get, { id: promotionId });
   if (!promotion) return { error: "La promoción no existe." };
 
   let warning: string | undefined;
-  if (promotion.shopify_discount_id && hasAdminToken()) {
+  if (promotion.shopifyDiscountId && hasAdminToken()) {
     try {
-      await setShopifyDiscountActive(promotion.shopify_discount_id, active);
+      await setShopifyDiscountActive(promotion.shopifyDiscountId, active);
     } catch (error) {
       return {
         error: `Shopify rechazó el cambio: ${error instanceof Error ? error.message : "error"}`,
@@ -224,11 +218,11 @@ export async function togglePromotionActive(
     warning = NO_SYNC_WARNING;
   }
 
-  const { error } = await supabase
-    .from("promotions")
-    .update({ active })
-    .eq("id", promotionId);
-  if (error) return { error: "No se pudo guardar el cambio." };
+  const result = await convexMutation(api.promotions.setActive, {
+    id: promotionId,
+    active,
+  });
+  if (result.error) return { error: "No se pudo guardar el cambio." };
 
   updateTag(PROMOTIONS_TAG);
   revalidatePath("/admin/promotions");
@@ -239,22 +233,18 @@ export async function togglePromotionAnnounce(
   promotionId: string,
   announce: boolean,
 ): Promise<PromotionActionState> {
-  const supabase = await requireAdmin();
-  const { data: promotion } = await supabase
-    .from("promotions")
-    .select("id, type")
-    .eq("id", promotionId)
-    .maybeSingle();
+  await requireAdmin();
+  const promotion = await convexQuery(api.promotions.get, { id: promotionId });
   if (!promotion) return { error: "La promoción no existe." };
   if (promotion.type !== "general") {
     return { error: "Solo las promociones generales se anuncian en la web." };
   }
 
-  const { error } = await supabase
-    .from("promotions")
-    .update({ announce })
-    .eq("id", promotionId);
-  if (error) return { error: "No se pudo guardar el cambio." };
+  const result = await convexMutation(api.promotions.setAnnounce, {
+    id: promotionId,
+    announce,
+  });
+  if (result.error) return { error: "No se pudo guardar el cambio." };
 
   // La barra del storefront lee la promo con cache tag: refresco inmediato.
   updateTag(PROMOTIONS_TAG);
@@ -265,17 +255,13 @@ export async function togglePromotionAnnounce(
 export async function deletePromotion(
   promotionId: string,
 ): Promise<PromotionActionState> {
-  const supabase = await requireAdmin();
-  const { data: promotion } = await supabase
-    .from("promotions")
-    .select("id, shopify_discount_id")
-    .eq("id", promotionId)
-    .maybeSingle();
+  await requireAdmin();
+  const promotion = await convexQuery(api.promotions.get, { id: promotionId });
   if (!promotion) return { error: "La promoción no existe." };
 
-  if (promotion.shopify_discount_id && hasAdminToken()) {
+  if (promotion.shopifyDiscountId && hasAdminToken()) {
     try {
-      await deleteShopifyDiscount(promotion.shopify_discount_id);
+      await deleteShopifyDiscount(promotion.shopifyDiscountId);
     } catch (error) {
       return {
         error: `No se pudo borrar en Shopify: ${error instanceof Error ? error.message : "error"}`,
@@ -283,11 +269,10 @@ export async function deletePromotion(
     }
   }
 
-  const { error } = await supabase
-    .from("promotions")
-    .delete()
-    .eq("id", promotionId);
-  if (error) return { error: "No se pudo eliminar la promoción." };
+  const result = await convexMutation(api.promotions.remove, {
+    id: promotionId,
+  });
+  if (result.error) return { error: "No se pudo eliminar la promoción." };
 
   updateTag(PROMOTIONS_TAG);
   revalidatePath("/admin/promotions");
