@@ -1,24 +1,24 @@
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { convexQuery } from "@/lib/convex/server";
 import { getGeneiLabelPdf } from "@/lib/crm/genei";
-import { createClient } from "@/lib/supabase/server";
 
 // Etiqueta PDF de un envío Genei: su API solo la da en base64 (sin URL
 // pública como Packlink), así que el sync la sube a Convex File Storage
 // (labelStorageId) y el admin la sirve inline desde aquí. Si aún no se ha
 // subido (compra muy reciente), respaldo con la API de Genei en vivo. Mismo
-// control de acceso que las server actions (sesión + is_admin).
+// control de acceso que las server actions (sesión + allowlist admin_users).
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ reference: string }> },
 ) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims) {
+  const token = await convexAuthNextjsToken();
+  if (!token) {
     return new Response("No autorizado", { status: 401 });
   }
-  const { data: isAdmin } = await supabase.rpc("is_admin");
+  const isAdmin = await fetchQuery(api.admins.isAdmin, {}, { token });
   if (!isAdmin) {
     return new Response("No autorizado", { status: 403 });
   }

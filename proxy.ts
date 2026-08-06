@@ -1,5 +1,8 @@
+import {
+  convexAuthNextjsMiddleware,
+  nextjsMiddlewareRedirect,
+} from "@convex-dev/auth/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
 import {
   IDENTITY_COOKIE,
   IDENTITY_MAX_AGE,
@@ -34,116 +37,132 @@ function detectLocale(request: NextRequest, country: string): Locale {
 }
 
 // Next 16 renamed the "middleware" file convention to "proxy" (same runtime).
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+// convexAuthNextjsMiddleware envuelve todo el árbol: refresca las cookies de
+// sesión de Convex Auth y atiende él mismo el apiRoute /api/auth (por eso va
+// en el matcher). El handler decide por ruta; la tienda no toca auth.
+export const proxy = convexAuthNextjsMiddleware(
+  async (request, { convexAuth }) => {
+    const { pathname } = request.nextUrl;
 
-  // El CRM mantiene su middleware de sesión; la tienda no toca Supabase.
-  if (pathname.startsWith("/admin")) return updateSession(request);
-
-  // Acortador de enlaces del CRM (app/l/[slug]/route.ts): vive fuera del
-  // árbol de locales — pasa sin rewrite ni redirección de idioma.
-  if (pathname === "/l" || pathname.startsWith("/l/")) {
-    return NextResponse.next();
-  }
-
-  // Identidad del CRM: los enlaces de los emails llegan con ?pj=<token
-  // firmado>. A cookie httpOnly y URL limpia (el token no debe quedarse en
-  // barra/historial/compartidos); la firma se verifica al USARLA — aquí no hay
-  // node:crypto. El redirect re-entra al proxy y sigue el flujo de locale.
-  const identity = request.nextUrl.searchParams.get(IDENTITY_PARAM);
-  if (identity) {
-    const url = request.nextUrl.clone();
-    url.searchParams.delete(IDENTITY_PARAM);
-    const response = NextResponse.redirect(url, 307);
-    response.cookies.set(IDENTITY_COOKIE, identity, {
-      maxAge: IDENTITY_MAX_AGE,
-      path: "/",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    });
-    return response;
-  }
-
-  const country =
-    request.headers.get("x-vercel-ip-country")?.toUpperCase() ?? "";
-  const isBot = BOT_RE.test(request.headers.get("user-agent") ?? "");
-
-  // Retired URLs (pre-localization /search & /product) → new localized slugs.
-  const legacy = legacyRedirect(pathname);
-  if (legacy) {
-    const url = request.nextUrl.clone();
-    url.pathname = legacy;
-    return NextResponse.redirect(url, 301);
-  }
-
-  // /es/* is internal-only (the root IS Spanish): canonicalize away.
-  if (pathname === "/es" || pathname.startsWith("/es/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/es/, "") || "/";
-    return NextResponse.redirect(url, 308);
-  }
-
-  const isEnglishPath = pathname === "/en" || pathname.startsWith("/en/");
-  const preferred = detectLocale(request, country);
-
-  let response: NextResponse;
-  if (isEnglishPath) {
-    // Real route segment: rewrite the localized public path onto the internal
-    // /search|/product route (app/(store)/[locale] with locale = "en").
-    const rel = pathname === "/en" ? "/" : pathname.slice(3);
-    const url = request.nextUrl.clone();
-    url.pathname = `/en${publicToInternal("en", rel)}`;
-    response = NextResponse.rewrite(url);
-  } else if (preferred === "en" && !isBot) {
-    // Non-Spanish visitor on an unprefixed (Spanish) URL → the matching English
-    // URL. Must translate slugs, not blind-prefix /en (that breaks /combas/pvc).
-    const url = request.nextUrl.clone();
-    url.pathname = translatePath("es", "en", pathname);
-    response = NextResponse.redirect(url, 307);
-  } else {
-    const url = request.nextUrl.clone();
-    url.pathname = `/es${publicToInternal("es", pathname)}`;
-    response = NextResponse.rewrite(url);
-  }
-
-  if (!isBot) {
-    const cookieOptions = { maxAge: 60 * 60 * 24 * 180, path: "/" };
-    if (request.cookies.get(LOCALE_COOKIE)?.value !== preferred) {
-      response.cookies.set(LOCALE_COOKIE, preferred, cookieOptions);
+    // El CRM exige sesión (la allowlist admin_users se aplica después, en el
+    // layout del panel y en cada server action vía api.admins.isAdmin).
+    if (pathname.startsWith("/admin")) {
+      const authenticated = await convexAuth.isAuthenticated();
+      if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
+        if (authenticated) return nextjsMiddlewareRedirect(request, "/admin");
+        return;
+      }
+      if (!authenticated)
+        return nextjsMiddlewareRedirect(request, "/admin/login");
+      return;
     }
-    // Buyer country for the cart's buyerIdentity (Shopify Markets/checkout).
-    if (country && request.cookies.get(COUNTRY_COOKIE)?.value !== country) {
-      response.cookies.set(COUNTRY_COOKIE, country, cookieOptions);
+
+    // Acortador de enlaces del CRM (app/l/[slug]/route.ts): vive fuera del
+    // árbol de locales — pasa sin rewrite ni redirección de idioma.
+    if (pathname === "/l" || pathname.startsWith("/l/")) {
+      return NextResponse.next();
     }
-    // Enlaces con código (?code=MARIA10: afiliados y emails del CRM): la cookie
-    // pj_discount queda fijada ya aquí para que el PRIMER render del layout
-    // sepa que el visitante trae código — si es de afiliado no se le enseña la
-    // promo general (pisaría su descuento) sino la barra de envío gratis.
-    // applyDiscountCode (DiscountCodeHandler) la re-fija luego con la caducidad
-    // real de la promo; el param se queda en la URL porque él lo consume.
-    const code = request.nextUrl.searchParams
-      .get("code")
-      ?.trim()
-      .toUpperCase()
-      .slice(0, 40);
-    if (
-      code &&
-      /^[A-Z0-9-]{4,}$/.test(code) &&
-      request.cookies.get("pj_discount")?.value !== code
-    ) {
-      response.cookies.set("pj_discount", code, {
+
+    // Identidad del CRM: los enlaces de los emails llegan con ?pj=<token
+    // firmado>. A cookie httpOnly y URL limpia (el token no debe quedarse en
+    // barra/historial/compartidos); la firma se verifica al USARLA — aquí no hay
+    // node:crypto. El redirect re-entra al proxy y sigue el flujo de locale.
+    const identity = request.nextUrl.searchParams.get(IDENTITY_PARAM);
+    if (identity) {
+      const url = request.nextUrl.clone();
+      url.searchParams.delete(IDENTITY_PARAM);
+      const response = NextResponse.redirect(url, 307);
+      response.cookies.set(IDENTITY_COOKIE, identity, {
+        maxAge: IDENTITY_MAX_AGE,
         path: "/",
-        maxAge: 60 * 60 * 24 * 90,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
       });
+      return response;
     }
-  }
 
-  return response;
-}
+    const country =
+      request.headers.get("x-vercel-ip-country")?.toUpperCase() ?? "";
+    const isBot = BOT_RE.test(request.headers.get("user-agent") ?? "");
+
+    // Retired URLs (pre-localization /search & /product) → new localized slugs.
+    const legacy = legacyRedirect(pathname);
+    if (legacy) {
+      const url = request.nextUrl.clone();
+      url.pathname = legacy;
+      return NextResponse.redirect(url, 301);
+    }
+
+    // /es/* is internal-only (the root IS Spanish): canonicalize away.
+    if (pathname === "/es" || pathname.startsWith("/es/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname.replace(/^\/es/, "") || "/";
+      return NextResponse.redirect(url, 308);
+    }
+
+    const isEnglishPath = pathname === "/en" || pathname.startsWith("/en/");
+    const preferred = detectLocale(request, country);
+
+    let response: NextResponse;
+    if (isEnglishPath) {
+      // Real route segment: rewrite the localized public path onto the internal
+      // /search|/product route (app/(store)/[locale] with locale = "en").
+      const rel = pathname === "/en" ? "/" : pathname.slice(3);
+      const url = request.nextUrl.clone();
+      url.pathname = `/en${publicToInternal("en", rel)}`;
+      response = NextResponse.rewrite(url);
+    } else if (preferred === "en" && !isBot) {
+      // Non-Spanish visitor on an unprefixed (Spanish) URL → the matching English
+      // URL. Must translate slugs, not blind-prefix /en (that breaks /combas/pvc).
+      const url = request.nextUrl.clone();
+      url.pathname = translatePath("es", "en", pathname);
+      response = NextResponse.redirect(url, 307);
+    } else {
+      const url = request.nextUrl.clone();
+      url.pathname = `/es${publicToInternal("es", pathname)}`;
+      response = NextResponse.rewrite(url);
+    }
+
+    if (!isBot) {
+      const cookieOptions = { maxAge: 60 * 60 * 24 * 180, path: "/" };
+      if (request.cookies.get(LOCALE_COOKIE)?.value !== preferred) {
+        response.cookies.set(LOCALE_COOKIE, preferred, cookieOptions);
+      }
+      // Buyer country for the cart's buyerIdentity (Shopify Markets/checkout).
+      if (country && request.cookies.get(COUNTRY_COOKIE)?.value !== country) {
+        response.cookies.set(COUNTRY_COOKIE, country, cookieOptions);
+      }
+      // Enlaces con código (?code=MARIA10: afiliados y emails del CRM): la cookie
+      // pj_discount queda fijada ya aquí para que el PRIMER render del layout
+      // sepa que el visitante trae código — si es de afiliado no se le enseña la
+      // promo general (pisaría su descuento) sino la barra de envío gratis.
+      // applyDiscountCode (DiscountCodeHandler) la re-fija luego con la caducidad
+      // real de la promo; el param se queda en la URL porque él lo consume.
+      const code = request.nextUrl.searchParams
+        .get("code")
+        ?.trim()
+        .toUpperCase()
+        .slice(0, 40);
+      if (
+        code &&
+        /^[A-Z0-9-]{4,}$/.test(code) &&
+        request.cookies.get("pj_discount")?.value !== code
+      ) {
+        response.cookies.set("pj_discount", code, {
+          path: "/",
+          maxAge: 60 * 60 * 24 * 90,
+        });
+      }
+    }
+
+    return response;
+  },
+);
 
 export const config = {
-  // Store + admin. Excluded: API routes, Next internals, Vercel internals and
-  // any path with an extension (assets, sitemap.xml, robots.txt, favicon...).
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  // Store + admin + the Convex Auth action route (/api/auth, proxied by the
+  // middleware itself). Excluded: other API routes, Next internals, Vercel
+  // internals and any path with an extension (assets, sitemap.xml, robots...).
+  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)", "/api/auth"],
 };

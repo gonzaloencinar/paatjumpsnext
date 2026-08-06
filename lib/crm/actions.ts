@@ -12,17 +12,18 @@ import {
   sanitizeContactIds,
   type SegmentFacets,
 } from "@/lib/crm/segments";
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
 import { sendCrmEmail } from "@/lib/email/send";
 import { CampaignEmail } from "@/lib/email/templates/campaign";
 import { unsubscribeUrl } from "@/lib/email/tokens";
-import { createClient } from "@/lib/supabase/server";
 import { api } from "@/convex/_generated/api";
 import { convexMutation, convexQuery } from "@/lib/convex/server";
 
-// Server actions del admin. El gate de sesión sigue siendo Supabase Auth
-// (requireAdmin, hasta F3); los DATOS viven en Convex — las mutations llevan
-// las guardas de estado y las unicidades dentro de la transacción, y aquí
-// queda la validación de formularios y el mapeo a mensajes en castellano.
+// Server actions del admin. El gate de sesión es Convex Auth (requireAdmin);
+// los DATOS viven en Convex — las mutations llevan las guardas de estado y
+// las unicidades dentro de la transacción, y aquí queda la validación de
+// formularios y el mapeo a mensajes en castellano.
 
 export type ActionState = {
   error?: string;
@@ -32,14 +33,13 @@ export type ActionState = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Gate de todas las mutaciones: sesión + allowlist. RLS es la última barrera. */
+/** Gate de todas las mutaciones: sesión de Convex Auth + allowlist admin_users. */
 export async function requireAdmin() {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims) redirect("/admin/login");
-  const { data: isAdmin } = await supabase.rpc("is_admin");
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect("/admin/login");
+  const isAdmin = await fetchQuery(api.admins.isAdmin, {}, { token });
   if (!isAdmin) throw new Error("No autorizado");
-  return supabase;
+  return token;
 }
 
 // ─────────────────────────── Contactos ───────────────────────────
@@ -349,16 +349,14 @@ async function getCampaignForSend(campaignId: string) {
 export async function sendTestCampaign(
   campaignId: string,
 ): Promise<ActionState> {
-  const supabase = await requireAdmin();
+  const token = await requireAdmin();
   const campaign = await getCampaignForSend(campaignId);
   if (!campaign) return { error: "La campaña no existe." };
   const invalid = notSendableError(campaign);
   if (invalid) return { error: invalid };
 
-  const { data } = await supabase.auth.getClaims();
-  const adminEmail = String(
-    (data?.claims as { email?: string } | undefined)?.email ?? "",
-  ).toLowerCase();
+  // La prueba se manda al email de la identidad de Convex Auth
+  const adminEmail = (await fetchQuery(api.admins.me, {}, { token })) ?? "";
   if (!adminEmail) return { error: "No se pudo leer tu email de la sesión." };
 
   try {

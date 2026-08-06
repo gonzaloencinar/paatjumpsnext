@@ -19,7 +19,7 @@ import {
   FINANCE_PARTNER_LABEL,
   FINANCE_PARTNERS,
 } from "@/lib/crm/format";
-import type { Tables } from "@/lib/supabase/types";
+import type { Tables } from "@/lib/crm/db-types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

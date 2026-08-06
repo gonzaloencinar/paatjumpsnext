@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as admins from "../admins.js";
+import type * as auth from "../auth.js";
 import type * as automations from "../automations.js";
 import type * as billing from "../billing.js";
 import type * as blog from "../blog.js";
@@ -18,6 +20,7 @@ import type * as dni from "../dni.js";
 import type * as emails from "../emails.js";
 import type * as engine from "../engine.js";
 import type * as finance from "../finance.js";
+import type * as http from "../http.js";
 import type * as lib_crm from "../lib/crm.js";
 import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
@@ -34,6 +37,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admins: typeof admins;
+  auth: typeof auth;
   automations: typeof automations;
   billing: typeof billing;
   blog: typeof blog;
@@ -44,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   engine: typeof engine;
   finance: typeof finance;
+  http: typeof http;
   "lib/crm": typeof lib_crm;
   "lib/server": typeof lib_server;
   links: typeof links;

@@ -10,7 +10,7 @@ import {
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
-import type { Json } from "@/lib/supabase/types";
+import type { Json } from "@/lib/crm/db-types";
 import {
   CONTACT_STATUS,
   eventLabel,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BanIcon,
   ChartSplineIcon,
@@ -21,7 +21,7 @@ import {
   WorkflowIcon,
 } from "lucide-react";
 import LogoIcon from "components/icons/logo";
-import { logout } from "@/app/admin/login/actions";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -86,6 +86,8 @@ const NAV_GROUPS = [
 
 export function AppSidebar({ email }: { email: string }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut } = useAuthActions();
 
   return (
     <Sidebar>
@@ -179,7 +181,11 @@ export function AppSidebar({ email }: { email: string }) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => void logout()}>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      void signOut().then(() => router.push("/admin/login"))
+                    }
+                  >
                     <LogOutIcon />
                     Cerrar sesión
                   </DropdownMenuItem>

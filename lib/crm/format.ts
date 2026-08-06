@@ -1,4 +1,4 @@
-import type { Tables } from "@/lib/supabase/types";
+import type { Tables } from "@/lib/crm/db-types";
 
 export type Contact = Tables<"contacts">;
 export type Customer = Tables<"customers">;

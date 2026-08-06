@@ -1,9 +1,10 @@
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
 import { ShieldAlertIcon } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/convex/_generated/api";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -13,22 +14,22 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { AppSidebar } from "@/components/admin/app-sidebar";
-import { logout } from "@/app/admin/login/actions";
+import { SignOutButton } from "@/components/admin/sign-out-button";
 
 export default async function PanelLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  // El middleware ya refresca la sesión; aquí se re-verifica (no confiar solo
-  // en middleware) y se aplica la allowlist de admin_users vía is_admin().
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  if (!claims) redirect("/admin/login");
+  // El proxy ya exige sesión; aquí se re-verifica (no confiar solo en
+  // middleware) y se aplica la allowlist admin_users vía api.admins.isAdmin.
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect("/admin/login");
 
-  const email = typeof claims.email === "string" ? claims.email : "";
-  const { data: isAdmin } = await supabase.rpc("is_admin");
+  const [isAdmin, email] = await Promise.all([
+    fetchQuery(api.admins.isAdmin, {}, { token }),
+    fetchQuery(api.admins.me, {}, { token }),
+  ]);
 
   if (!isAdmin) {
     return (
@@ -45,11 +46,7 @@ export default async function PanelLayout({
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <form action={logout}>
-              <Button variant="outline" type="submit">
-                Cerrar sesión
-              </Button>
-            </form>
+            <SignOutButton />
           </EmptyContent>
         </Empty>
       </div>
@@ -58,7 +55,7 @@ export default async function PanelLayout({
 
   return (
     <SidebarProvider>
-      <AppSidebar email={email} />
+      <AppSidebar email={email ?? ""} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );

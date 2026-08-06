@@ -1,3 +1,4 @@
+import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -74,6 +75,9 @@ const financeFrequency = v.union(
 );
 
 export default defineSchema({
+  // ── Convex Auth (users, authAccounts, authSessions…) ───────────────────
+  ...authTables,
+
   // ── CRM ────────────────────────────────────────────────────────────────
   contacts: defineTable({
     legacyId: v.optional(v.string()),

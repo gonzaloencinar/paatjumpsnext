@@ -58,7 +58,7 @@ import {
 // PRO y Genei a la vez; el borrador se crea en el proveedor de la opción
 // elegida (por defecto, la más barata domicilio-domicilio).
 // Los datos viven en Convex (convex/shipments.ts); requireAdmin() sigue
-// validando la sesión (el cliente Supabase que devuelve ya no se usa aquí).
+// validando la sesión (Convex Auth + allowlist admin_users).
 
 const ORDERS_PATH = "/admin/orders";
 
