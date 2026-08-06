@@ -5,6 +5,8 @@ import {
   type SegmentFacets,
 } from "@/lib/crm/segments";
 import { createClient } from "@/lib/supabase/server";
+import { api } from "@/convex/_generated/api";
+import { convexQuery, msToIso } from "@/lib/convex/server";
 
 export const CONTACTS_PER_PAGE = 25;
 
@@ -465,26 +467,39 @@ export async function listSuppressions() {
 // ─────────────────────────── Blog ───────────────────────────
 
 export async function listBlogPosts() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(
-      "id, slug, title, status, published_at, updated_at, created_at, seo_title, seo_description",
-    )
-    .order("published_at", { ascending: false, nullsFirst: true })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  const posts = await convexQuery(api.blog.listAll, {});
+  return posts.map((doc) => ({
+    id: doc._id,
+    slug: doc.slug,
+    title: doc.title,
+    status: doc.status,
+    published_at: msToIso(doc.publishedAt),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+    created_at: new Date(doc.createdAt).toISOString(),
+    seo_title: doc.seoTitle ?? null,
+    seo_description: doc.seoDescription ?? null,
+  }));
 }
 
 export async function getBlogPost(id: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("blog_posts")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  return data;
+  const doc = await convexQuery(api.blog.get, { id });
+  if (!doc) return null;
+  return {
+    id: doc._id,
+    slug: doc.slug,
+    title: doc.title,
+    excerpt: doc.excerpt ?? null,
+    content_md: doc.contentMd,
+    cover_image_url: doc.coverImageUrl ?? null,
+    seo_title: doc.seoTitle ?? null,
+    seo_description: doc.seoDescription ?? null,
+    keywords: doc.keywords ?? null,
+    status: doc.status,
+    author: doc.author,
+    published_at: msToIso(doc.publishedAt),
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+  };
 }
 
 export const CARTS_PER_PAGE = 50;

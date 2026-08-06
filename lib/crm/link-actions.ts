@@ -1,26 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { requireAdmin, type ActionState } from "@/lib/crm/actions";
 
 // Acciones del acortador de enlaces (/admin/links). El slug es la parte
 // visible (paatjumps.com/l/<slug>); destino + UTMs se componen al redirigir
-// en app/l/[slug]/route.ts.
+// en app/l/[slug]/route.ts. Los checks de unicidad/alias y el renombrado con
+// alias viven en la mutation (convex/links.ts), donde son transaccionales.
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 
 function optional(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  return value || null;
+  return value || undefined;
 }
 
 export async function saveShortLink(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
+  const id = String(formData.get("id") ?? "").trim() || undefined;
   const slug = String(formData.get("slug") ?? "")
     .trim()
     .toLowerCase();
@@ -35,79 +38,27 @@ export async function saveShortLink(
     return { error: "El destino debe empezar por / o https://." };
   }
 
-  // El slug nuevo no puede ser alias de otro enlace (redirigiría al ajeno)
-  let conflictQuery = supabase
-    .from("short_links")
-    .select("slug")
-    .contains("aliases", [slug]);
-  if (id) conflictQuery = conflictQuery.neq("id", id);
-  const { data: aliasConflict } = await conflictQuery.maybeSingle();
-  if (aliasConflict) {
-    return {
-      error: `"${slug}" ya redirige a /l/${aliasConflict.slug} (es un alias suyo).`,
-    };
-  }
-
-  const row: {
-    slug: string;
-    destination: string;
-    utm_source: string | null;
-    utm_medium: string | null;
-    utm_campaign: string | null;
-    utm_term: string | null;
-    utm_content: string | null;
-    notes: string | null;
-    updated_at: string;
-    aliases?: string[];
-  } = {
+  const result = await convexMutation(api.links.save, {
+    id,
     slug,
     destination,
-    utm_source: optional(formData, "utm_source"),
-    utm_medium: optional(formData, "utm_medium"),
-    utm_campaign: optional(formData, "utm_campaign"),
-    utm_term: optional(formData, "utm_term"),
-    utm_content: optional(formData, "utm_content"),
+    utmSource: optional(formData, "utm_source"),
+    utmMedium: optional(formData, "utm_medium"),
+    utmCampaign: optional(formData, "utm_campaign"),
+    utmTerm: optional(formData, "utm_term"),
+    utmContent: optional(formData, "utm_content"),
     notes: optional(formData, "notes"),
-    updated_at: new Date().toISOString(),
-  };
-
-  // Renombrar el slug no rompe lo publicado: el antiguo queda como alias del
-  // mismo enlace (redirige igual y suma el clic aquí, sin fila propia).
-  if (id) {
-    const { data: current } = await supabase
-      .from("short_links")
-      .select("slug, aliases")
-      .eq("id", id)
-      .maybeSingle();
-    if (current && current.slug !== slug) {
-      const aliases = new Set(current.aliases ?? []);
-      aliases.add(current.slug);
-      aliases.delete(slug); // por si recupera un nombre que era alias
-      row.aliases = [...aliases];
-    }
-  }
-
-  const { error } = id
-    ? await supabase.from("short_links").update(row).eq("id", id)
-    : await supabase.from("short_links").insert(row);
-
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? `El slug "${slug}" ya existe.`
-          : `No se pudo guardar: ${error.message}`,
-    };
-  }
+  });
+  if (result.error) return { error: result.error };
 
   revalidatePath("/admin/links");
   return { ok: true };
 }
 
 export async function deleteShortLink(id: string): Promise<ActionState> {
-  const supabase = await requireAdmin();
-  const { error } = await supabase.from("short_links").delete().eq("id", id);
-  if (error) return { error: `No se pudo borrar: ${error.message}` };
+  await requireAdmin();
+  const result = await convexMutation(api.links.remove, { id });
+  if (result.error) return { error: `No se pudo borrar: ${result.error}` };
   revalidatePath("/admin/links");
   return { ok: true };
 }

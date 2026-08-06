@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as blog from "../blog.js";
+import type * as lib_server from "../lib/server.js";
+import type * as links from "../links.js";
 import type * as migration from "../migration.js";
 
 import type {
@@ -17,6 +20,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  blog: typeof blog;
+  "lib/server": typeof lib_server;
+  links: typeof links;
   migration: typeof migration;
 }>;
 

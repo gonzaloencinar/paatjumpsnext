@@ -2,7 +2,9 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { api } from "@/convex/_generated/api";
 import { BLOG_TAG } from "@/lib/blog/queries";
+import { convexMutation } from "@/lib/convex/server";
 import { madridLocalToUtc } from "@/lib/crm/schedule";
 import { requireAdmin, type ActionState } from "./actions";
 
@@ -12,7 +14,7 @@ function slugify(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
@@ -21,14 +23,14 @@ function slugify(value: string) {
 type ParsedPost = {
   title: string;
   slug: string;
-  excerpt: string | null;
-  content_md: string;
-  cover_image_url: string | null;
-  seo_title: string | null;
-  seo_description: string | null;
-  keywords: string | null;
+  excerpt: string | undefined;
+  contentMd: string;
+  coverImageUrl: string | undefined;
+  seoTitle: string | undefined;
+  seoDescription: string | undefined;
+  keywords: string | undefined;
   status: "draft" | "published";
-  published_at: string | null;
+  publishedAt: number | undefined;
 };
 
 async function parseForm(
@@ -47,29 +49,29 @@ async function parseForm(
 
   // datetime-local en hora de Madrid → UTC. Fecha futura = programada.
   const publishedLocal = String(formData.get("published_local") ?? "").trim();
-  let published_at: string | null = null;
+  let publishedAt: number | undefined;
   if (publishedLocal) {
     const when = madridLocalToUtc(publishedLocal);
     if (!when) return { error: "La fecha de publicación no es válida." };
-    published_at = when.toISOString();
+    publishedAt = when.getTime();
   } else if (status === "published") {
-    published_at = new Date().toISOString();
+    publishedAt = Date.now();
   }
 
   const optional = (name: string) =>
-    String(formData.get(name) ?? "").trim() || null;
+    String(formData.get(name) ?? "").trim() || undefined;
 
   return {
     title,
     slug,
     excerpt: optional("excerpt"),
-    content_md: String(formData.get("content_md") ?? ""),
-    cover_image_url: optional("cover_image_url"),
-    seo_title: optional("seo_title"),
-    seo_description: optional("seo_description"),
+    contentMd: String(formData.get("content_md") ?? ""),
+    coverImageUrl: optional("cover_image_url"),
+    seoTitle: optional("seo_title"),
+    seoDescription: optional("seo_description"),
     keywords: optional("keywords"),
     status,
-    published_at,
+    publishedAt,
   };
 }
 
@@ -83,26 +85,17 @@ export async function createBlogPost(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
   const fields = await parseForm(formData);
   if ("error" in fields) return fields;
 
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .insert(fields)
-    .select("id")
-    .single();
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? "Ya existe una entrada con ese slug."
-          : "No se pudo crear la entrada.",
-    };
+  const result = await convexMutation(api.blog.create, fields);
+  if (result.error || !result.id) {
+    return { error: result.error ?? "No se pudo crear la entrada." };
   }
 
   refreshBlog();
-  redirect(`/admin/blog/${data.id}`);
+  redirect(`/admin/blog/${result.id}`);
 }
 
 export async function updateBlogPost(
@@ -110,30 +103,23 @@ export async function updateBlogPost(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await requireAdmin();
+  await requireAdmin();
   const fields = await parseForm(formData);
   if ("error" in fields) return fields;
 
-  const { error } = await supabase
-    .from("blog_posts")
-    .update(fields)
-    .eq("id", postId);
-  if (error) {
-    return {
-      error:
-        error.code === "23505"
-          ? "Ya existe una entrada con ese slug."
-          : "No se pudo guardar la entrada.",
-    };
-  }
+  const result = await convexMutation(api.blog.update, {
+    id: postId,
+    ...fields,
+  });
+  if (result.error) return { error: result.error };
 
   refreshBlog(postId);
   return { ok: true };
 }
 
 export async function deleteBlogPost(postId: string) {
-  const supabase = await requireAdmin();
-  const { error } = await supabase.from("blog_posts").delete().eq("id", postId);
-  if (error) throw error;
+  await requireAdmin();
+  const result = await convexMutation(api.blog.remove, { id: postId });
+  if (result.error) throw new Error(result.error);
   refreshBlog();
 }
