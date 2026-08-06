@@ -1,9 +1,13 @@
+import { api } from "@/convex/_generated/api";
+import { convexQuery } from "@/lib/convex/server";
 import { getGeneiLabelPdf } from "@/lib/crm/genei";
 import { createClient } from "@/lib/supabase/server";
 
 // Etiqueta PDF de un envío Genei: su API solo la da en base64 (sin URL
-// pública como Packlink), así que el admin la descarga aquí y la sirve
-// inline. Mismo control de acceso que las server actions (sesión + is_admin).
+// pública como Packlink), así que el sync la sube a Convex File Storage
+// (labelStorageId) y el admin la sirve inline desde aquí. Si aún no se ha
+// subido (compra muy reciente), respaldo con la API de Genei en vivo. Mismo
+// control de acceso que las server actions (sesión + is_admin).
 
 export async function GET(
   _request: Request,
@@ -20,11 +24,18 @@ export async function GET(
   }
 
   const { reference } = await params;
-  const pdf = await getGeneiLabelPdf(reference);
+
+  let pdf: ArrayBuffer | Uint8Array | null = null;
+  const storedUrl = await convexQuery(api.shipments.labelUrl, { reference });
+  if (storedUrl) {
+    const stored = await fetch(storedUrl);
+    if (stored.ok) pdf = await stored.arrayBuffer();
+  }
+  if (!pdf) pdf = await getGeneiLabelPdf(reference);
   if (!pdf) {
     return new Response("La etiqueta aún no está disponible.", { status: 404 });
   }
-  return new Response(pdf, {
+  return new Response(pdf as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="etiqueta-genei-${reference}.pdf"`,

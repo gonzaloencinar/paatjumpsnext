@@ -14,6 +14,7 @@ import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
 import type * as migration from "../migration.js";
 import type * as promotions from "../promotions.js";
+import type * as shipments from "../shipments.js";
 import type * as store from "../store.js";
 
 import type {
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   links: typeof links;
   migration: typeof migration;
   promotions: typeof promotions;
+  shipments: typeof shipments;
   store: typeof store;
 }>;
 
