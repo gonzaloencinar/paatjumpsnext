@@ -8,7 +8,9 @@
  * @module
  */
 
+import type * as billing from "../billing.js";
 import type * as blog from "../blog.js";
+import type * as dni from "../dni.js";
 import type * as finance from "../finance.js";
 import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
@@ -24,7 +26,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  billing: typeof billing;
   blog: typeof blog;
+  dni: typeof dni;
   finance: typeof finance;
   "lib/server": typeof lib_server;
   links: typeof links;
