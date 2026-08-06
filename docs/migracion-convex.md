@@ -22,6 +22,23 @@ Estado vivo de la migración. Proyecto Convex: team `paat-jumps`, proyecto `paat
 - Re-ejecutar el volcado: `node tools/convex-migrate/import.mjs` (hace wipe + import + verify;
   `--prod` para producción en el corte final).
 
+## ✅ MIGRACIÓN COMPLETADA — corte a producción ejecutado el 2026-08-06
+
+Prod Convex: `beaming-parrot-486` (https://beaming-parrot-486.convex.cloud). Datos
+importados y verificados 26/26 en el corte con estado tranquilo (0 en vuelo); merge a
+main desplegado en Vercel; verificado en vivo: tienda, /blog, /l/ (clic registrado en
+Convex prod), /admin→login (Convex Auth) y cron automations 200 con motor sobre Convex.
+Supabase ya no recibe tráfico — dejar unos días como backup frío y pausar el proyecto.
+
+Post-corte pendiente:
+- Los 3 admins crean contraseña en /admin/login ("Crear cuenta" con email del allowlist).
+- Vercel NO despliega funciones Convex (build = `pnpm build`): cambios bajo convex/
+  requieren `npx convex deploy` manual, o crear un Deploy Key en el dashboard de Convex
+  (Settings del proyecto), añadirlo como CONVEX_DEPLOY_KEY en Vercel y cambiar el build
+  command a `npx convex deploy --cmd 'pnpm build'`.
+- Google OAuth opcional (TODO en convex/auth.ts) cuando exista el OAuth client.
+- F4 (crons nativos Convex) sigue siendo opcional.
+
 ## Estado: F2 y F3 COMPLETAS en la rama `convex-migration` (2026-08-06)
 
 Todas las áreas de F2 portadas y verificadas (tsc + build + smoke tests): links, blog,
