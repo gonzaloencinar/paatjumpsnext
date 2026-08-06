@@ -22,6 +22,20 @@ Estado vivo de la migración. Proyecto Convex: team `paat-jumps`, proyecto `paat
 - Re-ejecutar el volcado: `node tools/convex-migrate/import.mjs` (hace wipe + import + verify;
   `--prod` para producción en el corte final).
 
+## Estado: F2 y F3 COMPLETAS en la rama `convex-migration` (2026-08-06)
+
+Todas las áreas de F2 portadas y verificadas (tsc + build + smoke tests): links, blog,
+finanzas, promos, tienda, envíos (etiquetas Genei en File Storage), Holded+DNI, CRM
+núcleo, motores y webhooks. Los RPC `claim_*`/`assign_discount_code` son mutations
+transaccionales (`convex/engine.ts`); los webhooks aplican sus efectos en una mutation
+idempotente. F3 hecha: Convex Auth (Password) con allowlist `admin_users`
+(`convex/admins.ts:isAdmin`), login verificado end-to-end, `lib/supabase/**` y
+`@supabase/*` eliminados (tipos legacy en `lib/crm/db-types.ts`).
+
+Queda: F4 (opcional) y F5 (corte a prod — checklist abajo). OJO: no ejecutar los crons
+en local contra el deployment dev — los motores usan la RESEND_API_KEY real y hay
+enrollments importados con `next_run_at` vencido: enviaría emails reales.
+
 ## Pendiente (fases)
 
 ### F2 — Capa de datos Convex + swap del código Next
@@ -101,15 +115,25 @@ identidad autenticada + email en `admin_users` (reemplaza `is_admin()` RLS). Afe
 Packlink/Genei/Holded) → actions. Al terminar: borrar `vercel.json` crons, rutas
 `app/api/cron/*` y `CRON_SECRET`. Secretos de terceros → `npx convex env set` en dev y prod.
 
-### F5 — Corte a producción
+### F5 — Corte a producción (ÚNICA fase que queda; requiere coordinación)
 
-1. `npx convex deploy` desde CI de Vercel (build command `npx convex deploy --cmd 'pnpm build'`
-   con `CONVEX_DEPLOY_KEY` de prod) → crea el deployment de prod.
-2. Env vars en Vercel: `NEXT_PUBLIC_CONVEX_URL` (prod) + `CONVEX_DEPLOY_KEY`.
-3. Congelar escrituras (pausar crons ~10 min), `node tools/convex-migrate/import.mjs --prod`,
-   verificar conteos, desplegar el código ya migrado.
-4. Días después: retirar `@supabase/*` del package.json, `lib/supabase/`, migraciones SQL,
-   y pausar el proyecto Supabase (queda como backup frío).
+1. Crear el deployment de prod: `npx convex deploy` (o build command de Vercel
+   `npx convex deploy --cmd 'pnpm build'` con `CONVEX_DEPLOY_KEY` de prod).
+2. Env vars del deployment PROD de Convex (`npx convex env set --prod`):
+   `SERVER_KEY` (nuevo, distinto del de dev), `JWT_PRIVATE_KEY` + `JWKS` (claves nuevas,
+   generarlas headless con jose como en dev), `SITE_URL=https://www.paatjumps.com`.
+3. Env vars en Vercel: `NEXT_PUBLIC_CONVEX_URL` (URL prod), `NEXT_PUBLIC_CONVEX_SITE_URL`,
+   `CONVEX_SERVER_KEY` (= SERVER_KEY de prod), `CONVEX_DEPLOY_KEY`. Los secretos de
+   terceros (Shopify/Resend/Packlink/Genei/Holded) siguen en Vercel: los motores corren
+   en Next. Retirar `NEXT_PUBLIC_SUPABASE_*` y `SUPABASE_SECRET_KEY`.
+4. Congelar escrituras (~10 min): pausar crons de Vercel y desactivar webhooks o asumir
+   la ventana; `node tools/convex-migrate/import.mjs --prod`; verificar conteos.
+5. Mergear `convex-migration` a main → deploy. Los 3 admins crean contraseña nueva en
+   /admin/login ("Crear cuenta" con su email del allowlist).
+6. Opcional: OAuth client de Google nuevo → AUTH_GOOGLE_ID/SECRET en Convex prod y
+   activar el provider en convex/auth.ts (TODO marcado).
+7. Días después: borrar supabase/migrations/ si se quiere y pausar el proyecto Supabase
+   (queda como backup frío).
 
 ## Gotchas conocidos
 
