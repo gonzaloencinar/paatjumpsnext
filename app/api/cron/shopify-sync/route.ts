@@ -3,6 +3,7 @@ import {
   syncShopifyCustomers,
   syncShopifyOrders,
 } from "@/lib/crm/shopify-sync";
+import { reconcileRefundCreditNotes } from "@/lib/holded/credit-notes";
 import { invoiceNewOrders } from "@/lib/holded/receipts";
 
 // Sincronización Shopify → CRM (lib/crm/shopify-sync.ts): Vercel Cron cada
@@ -32,7 +33,24 @@ export async function GET(request: Request) {
       console.error("[cron/shopify-sync] holded", error);
       holded = { error: error instanceof Error ? error.message : "error" };
     }
-    return NextResponse.json({ ok: true, orders, customers, holded });
+    // Respaldo del webhook refunds/create: rectificativas pendientes de
+    // pedidos facturados con devoluciones (idempotente por refund_id).
+    let creditNotes: unknown = [];
+    try {
+      creditNotes = await reconcileRefundCreditNotes();
+    } catch (error) {
+      console.error("[cron/shopify-sync] credit-notes", error);
+      creditNotes = {
+        error: error instanceof Error ? error.message : "error",
+      };
+    }
+    return NextResponse.json({
+      ok: true,
+      orders,
+      customers,
+      holded,
+      creditNotes,
+    });
   } catch (error) {
     console.error("[cron/shopify-sync]", error);
     return NextResponse.json(

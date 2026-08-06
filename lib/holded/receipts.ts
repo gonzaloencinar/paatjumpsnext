@@ -24,7 +24,7 @@ const ADMIN_DOMAIN =
   process.env.SHOPIFY_ADMIN_STORE_DOMAIN ?? "ars0a5-xx.myshopify.com";
 const API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2026-04";
 
-type Money = { shopMoney: { amount: string } };
+export type Money = { shopMoney: { amount: string } };
 type TaxLine = { ratePercentage: number | null; priceSet: Money };
 
 type ShopifyOrderDetail = {
@@ -158,7 +158,7 @@ const ORDER_QUERY = /* GraphQL */ `
   }
 `;
 
-type ShopifyAddress = {
+export type ShopifyAddress = {
   firstName: string | null;
   lastName: string | null;
   company: string | null;
@@ -199,10 +199,12 @@ async function fetchShopifyOrder(
   return json.data.order as ShopifyOrderDetail | null;
 }
 
-const money = (m: Money) => Number(m.shopMoney.amount);
+export const money = (m: Money) => Number(m.shopMoney.amount);
 
 // Números de la API de Holded: formato español ("1.234,56")
-function parseEsNumber(value: string | number | null | undefined): number {
+export function parseEsNumber(
+  value: string | number | null | undefined,
+): number {
   if (value == null) return 0;
   if (typeof value === "number") return value;
   return Number(value.replace(/\./g, "").replace(",", "."));
@@ -246,7 +248,7 @@ function isSpainVatExcluded(zip: string | null | undefined) {
 }
 
 // Tax key de Holded según el IVA que Shopify aplicó realmente.
-function taxKeyFor(
+export function taxKeyFor(
   rate: number,
   countryCode: string | null,
   zip: string | null,
@@ -287,7 +289,7 @@ export type MappedReceipt = {
   orderName: string;
 };
 
-function madridDate(iso: string): string {
+export function madridDate(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Madrid",
     year: "numeric",
@@ -296,7 +298,7 @@ function madridDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+export const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 // Traduce el pedido a líneas de Holded. Lanza si aparece un tipo de IVA que
 // no sabemos mapear (mejor fallar que contabilizar mal).
@@ -386,7 +388,9 @@ export function mapOrderToReceipt(order: ShopifyOrderDetail): MappedReceipt {
 
 type HoldedList<T> = { items: T[] };
 
-async function ensureContact(mapped: MappedReceipt): Promise<string | null> {
+export async function ensureContact(
+  mapped: Pick<MappedReceipt, "email" | "contactName" | "address">,
+): Promise<string | null> {
   if (!mapped.email) return null;
   const existing = await holdedFetch<HoldedList<{ id: string }>>("/contacts", {
     query: { email: mapped.email, limit: "1" },
@@ -423,7 +427,7 @@ async function ensureContact(mapped: MappedReceipt): Promise<string | null> {
 // los tickets para que queden pagados sin ensuciar las cuentas bancarias.
 let shopifyTreasuryId: string | null = null;
 
-async function ensureShopifyTreasury(): Promise<string> {
+export async function ensureShopifyTreasury(): Promise<string> {
   if (shopifyTreasuryId) return shopifyTreasuryId;
   const accounts =
     await holdedFetch<HoldedList<{ id: string; name: string }>>(

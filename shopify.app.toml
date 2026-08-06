@@ -15,6 +15,12 @@ api_version = "2026-04"
   topics = [ "orders/create", "orders/updated" ]
   uri = "https://www.paatjumps.com/api/webhooks/shopify"
 
+  # refunds/create → rectificativa (abono) automática en Holded si el pedido
+  # ya tenía ticket emitido (lib/holded/credit-notes.ts)
+  [[webhooks.subscriptions]]
+  topics = [ "refunds/create" ]
+  uri = "https://www.paatjumps.com/api/webhooks/shopify"
+
   [[webhooks.subscriptions]]
   topics = [ "checkouts/create", "checkouts/update" ]
   uri = "https://www.paatjumps.com/api/webhooks/shopify"

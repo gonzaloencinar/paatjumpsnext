@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { enrollCheckoutInCartRecovery } from "@/lib/crm/automation-engine";
 import { ensureDniRequest } from "@/lib/crm/dni-requests";
+import { issueCreditNotesForOrder } from "@/lib/holded/credit-notes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Webhooks de Shopify (plan §7.2 y §8): orders/create + checkouts/create|update.
@@ -610,6 +611,14 @@ export async function POST(request: Request) {
       await handleOrderCreate(supabase, body as OrderPayload);
     } else if (topic === "checkouts/create" || topic === "checkouts/update") {
       await handleCheckout(supabase, body as CheckoutPayload);
+    } else if (topic === "refunds/create") {
+      // Rectificativa automática en Holded si el pedido ya tenía ticket.
+      // issueCreditNotesForOrder relee los refunds en vivo de la Admin API y
+      // es idempotente por refund_id, así que los reintentos son inocuos.
+      const refund = body as { order_id?: number };
+      if (refund.order_id) {
+        await issueCreditNotesForOrder(refund.order_id);
+      }
     }
     // Topics no manejados: 200 igualmente (que Shopify no reintente)
     return NextResponse.json({ received: true });
