@@ -3,6 +3,7 @@ import {
   syncShopifyCustomers,
   syncShopifyOrders,
 } from "@/lib/crm/shopify-sync";
+import { invoiceNewOrders } from "@/lib/holded/receipts";
 
 // Sincronización Shopify → CRM (lib/crm/shopify-sync.ts): Vercel Cron cada
 // 10 minutos con `Authorization: Bearer CRON_SECRET`. Primera ejecución =
@@ -22,7 +23,16 @@ export async function GET(request: Request) {
   try {
     const orders = await syncShopifyOrders({ full });
     const customers = await syncShopifyCustomers({ full });
-    return NextResponse.json({ ok: true, orders, customers });
+    // Tras el sync (financial_status y devoluciones ya reconciliados):
+    // emitir ticket de venta en Holded + email para los pedidos nuevos.
+    let holded: unknown = [];
+    try {
+      holded = await invoiceNewOrders();
+    } catch (error) {
+      console.error("[cron/shopify-sync] holded", error);
+      holded = { error: error instanceof Error ? error.message : "error" };
+    }
+    return NextResponse.json({ ok: true, orders, customers, holded });
   } catch (error) {
     console.error("[cron/shopify-sync]", error);
     return NextResponse.json(

@@ -851,6 +851,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      order_invoices: {
+        Row: {
+          attempts: number;
+          created_at: string;
+          document_number: string | null;
+          emailed_at: string | null;
+          error: string | null;
+          holded_id: string | null;
+          order_id: number;
+          order_name: string | null;
+          status: string;
+          tax: number | null;
+          total: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          attempts?: number;
+          created_at?: string;
+          document_number?: string | null;
+          emailed_at?: string | null;
+          error?: string | null;
+          holded_id?: string | null;
+          order_id: number;
+          order_name?: string | null;
+          status?: string;
+          tax?: number | null;
+          total?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          attempts?: number;
+          created_at?: string;
+          document_number?: string | null;
+          emailed_at?: string | null;
+          error?: string | null;
+          holded_id?: string | null;
+          order_id?: number;
+          order_name?: string | null;
+          status?: string;
+          tax?: number | null;
+          total?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       orders: {
         Row: {
           campaign_id: string | null;
