@@ -1,16 +1,36 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { api } from "@/convex/_generated/api";
+import { convexMutation, convexQuery } from "@/lib/convex/server";
 import { requireAdmin } from "./actions";
 import { currentMadridMonth, freezePastMonthsIrpf } from "./finance";
 import { FINANCE_FREQUENCIES } from "./format";
 
 // Mutaciones de /admin/finance: movimientos manuales, recurrentes y % IRPF.
+// El gate sigue siendo requireAdmin() (sesión + allowlist); los datos viven en
+// Convex (convex/finance.ts).
 
 export type FinanceActionState = { error?: string; ok?: boolean } | null;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FINANCE_PATH = "/admin/finance";
+
+// Ejecuta la mutación traduciendo tanto el error de negocio ({ error }) como
+// el fallo de infraestructura (throw) a la forma legacy del formulario.
+async function runMutation(
+  work: Promise<{ error?: string; ok?: boolean }>,
+  fallback: string,
+): Promise<FinanceActionState> {
+  try {
+    const result = await work;
+    if (result?.error) return { error: result.error };
+  } catch {
+    return { error: fallback };
+  }
+  revalidatePath(FINANCE_PATH);
+  return { ok: true };
+}
 
 function parseAmount(raw: FormDataEntryValue | null): number | null {
   const value = Number(
@@ -36,8 +56,8 @@ type ParsedEntry = {
   concept: string;
   amount: number;
   partner: "gonzalo" | "patri";
-  entry_date: string;
-  notes: string | null;
+  entryDate: string;
+  notes: string | undefined;
 };
 
 function parseEntryForm(formData: FormData): ParsedEntry | { error: string } {
@@ -46,14 +66,14 @@ function parseEntryForm(formData: FormData): ParsedEntry | { error: string } {
   const amount = parseAmount(formData.get("amount"));
   const partner = parsePartner(formData.get("partner"));
   const entryDate = String(formData.get("entry_date") ?? "").trim();
-  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || undefined;
 
   if (!concept) return { error: "El movimiento necesita un concepto." };
   if (amount === null) return { error: "Importe no válido." };
   if (!partner) return { error: "Elige quién lo paga o lo cobra." };
   if (!DATE_RE.test(entryDate)) return { error: "Fecha no válida." };
 
-  return { type, concept, amount, partner, entry_date: entryDate, notes };
+  return { type, concept, amount, partner, entryDate, notes };
 }
 
 export async function createFinanceEntry(
@@ -62,11 +82,11 @@ export async function createFinanceEntry(
 ): Promise<FinanceActionState> {
   const parsed = parseEntryForm(formData);
   if ("error" in parsed) return parsed;
-  const supabase = await requireAdmin();
-  const { error } = await supabase.from("finance_entries").insert(parsed);
-  if (error) return { error: "No se pudo guardar el movimiento." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.createEntry, parsed),
+    "No se pudo guardar el movimiento.",
+  );
 }
 
 export async function updateFinanceEntry(
@@ -76,40 +96,24 @@ export async function updateFinanceEntry(
 ): Promise<FinanceActionState> {
   const parsed = parseEntryForm(formData);
   if ("error" in parsed) return parsed;
-  const supabase = await requireAdmin();
-  const { error } = await supabase
-    .from("finance_entries")
-    .update({ ...parsed, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return { error: "No se pudo actualizar el movimiento." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.updateEntry, { id, ...parsed }),
+    "No se pudo actualizar el movimiento.",
+  );
 }
 
-// Las entradas generadas por un recurrente se marcan con deleted_at
+// Las entradas generadas por un recurrente se marcan con deletedAt
 // (tombstone) para que la materialización no las recree; las manuales se
-// borran de verdad.
+// borran de verdad. La distinción vive en la mutación (transaccional).
 export async function deleteFinanceEntry(
   id: string,
 ): Promise<FinanceActionState> {
-  const supabase = await requireAdmin();
-  const { data: entry } = await supabase
-    .from("finance_entries")
-    .select("id, recurring_id, period")
-    .eq("id", id)
-    .maybeSingle();
-  if (!entry) return { error: "Movimiento no encontrado." };
-
-  const { error } =
-    entry.recurring_id && entry.period
-      ? await supabase
-          .from("finance_entries")
-          .update({ deleted_at: new Date().toISOString() })
-          .eq("id", id)
-      : await supabase.from("finance_entries").delete().eq("id", id);
-  if (error) return { error: "No se pudo eliminar el movimiento." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.deleteEntry, { id }),
+    "No se pudo eliminar el movimiento.",
+  );
 }
 
 // ─────────────────────────── recurrentes ───────────────────────────
@@ -119,12 +123,20 @@ type ParsedRecurring = {
   concept: string;
   amount: number;
   partner: "gonzalo" | "patri";
-  frequency: string;
-  day_of_month: number;
-  starts_on: string;
-  ends_on: string | null;
-  notes: string | null;
+  frequency: "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly";
+  dayOfMonth: number;
+  startsOn: string;
+  endsOn: string | undefined;
+  notes: string | undefined;
 };
+
+const RECURRING_FREQUENCIES = [
+  "monthly",
+  "bimonthly",
+  "quarterly",
+  "semiannual",
+  "yearly",
+] as const;
 
 function parseRecurringForm(
   formData: FormData,
@@ -137,12 +149,13 @@ function parseRecurringForm(
   const dayOfMonth = Math.round(Number(formData.get("day_of_month") ?? 1));
   const startsOn = String(formData.get("starts_on") ?? "").trim();
   const endsOn = String(formData.get("ends_on") ?? "").trim();
-  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || undefined;
 
   if (!concept) return { error: "El recurrente necesita un concepto." };
   if (amount === null) return { error: "Importe no válido." };
   if (!partner) return { error: "Elige quién lo paga o lo cobra." };
-  if (!FINANCE_FREQUENCIES[frequency]) {
+  const knownFrequency = RECURRING_FREQUENCIES.find((f) => f === frequency);
+  if (!knownFrequency || !FINANCE_FREQUENCIES[frequency]) {
     return { error: "Periodicidad no válida." };
   }
   if (!Number.isFinite(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 28) {
@@ -160,10 +173,10 @@ function parseRecurringForm(
     concept,
     amount,
     partner,
-    frequency,
-    day_of_month: dayOfMonth,
-    starts_on: startsOn,
-    ends_on: endsOn || null,
+    frequency: knownFrequency,
+    dayOfMonth,
+    startsOn,
+    endsOn: endsOn || undefined,
     notes,
   };
 }
@@ -174,11 +187,11 @@ export async function createFinanceRecurring(
 ): Promise<FinanceActionState> {
   const parsed = parseRecurringForm(formData);
   if ("error" in parsed) return parsed;
-  const supabase = await requireAdmin();
-  const { error } = await supabase.from("finance_recurring").insert(parsed);
-  if (error) return { error: "No se pudo guardar el recurrente." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.createRecurring, parsed),
+    "No se pudo guardar el recurrente.",
+  );
 }
 
 export async function updateFinanceRecurring(
@@ -188,53 +201,41 @@ export async function updateFinanceRecurring(
 ): Promise<FinanceActionState> {
   const parsed = parseRecurringForm(formData);
   if ("error" in parsed) return parsed;
-  const supabase = await requireAdmin();
-  const { error } = await supabase
-    .from("finance_recurring")
-    .update({ ...parsed, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return { error: "No se pudo actualizar el recurrente." };
-
-  // La entrada ya materializada del mes en curso se regenera con los nuevos
-  // datos (los meses pasados no se tocan; los tombstones se respetan).
-  await supabase
-    .from("finance_entries")
-    .delete()
-    .eq("recurring_id", id)
-    .gte("period", currentMadridMonth())
-    .is("deleted_at", null);
-
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  // La mutación también borra la entrada ya materializada del mes en curso en
+  // adelante para regenerarla con los nuevos datos (los meses pasados no se
+  // tocan; los tombstones se respetan).
+  return runMutation(
+    convexMutation(api.finance.updateRecurring, {
+      id,
+      fromPeriod: currentMadridMonth(),
+      ...parsed,
+    }),
+    "No se pudo actualizar el recurrente.",
+  );
 }
 
 export async function toggleFinanceRecurring(
   id: string,
   active: boolean,
 ): Promise<FinanceActionState> {
-  const supabase = await requireAdmin();
-  const { error } = await supabase
-    .from("finance_recurring")
-    .update({ active, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return { error: "No se pudo cambiar el estado." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.toggleRecurring, { id, active }),
+    "No se pudo cambiar el estado.",
+  );
 }
 
 // Al borrar el recurrente, sus movimientos ya generados se conservan como
-// movimientos sueltos (FK con set null).
+// movimientos sueltos (la mutación limpia su recurringId).
 export async function deleteFinanceRecurring(
   id: string,
 ): Promise<FinanceActionState> {
-  const supabase = await requireAdmin();
-  const { error } = await supabase
-    .from("finance_recurring")
-    .delete()
-    .eq("id", id);
-  if (error) return { error: "No se pudo eliminar el recurrente." };
-  revalidatePath(FINANCE_PATH);
-  return { ok: true };
+  await requireAdmin();
+  return runMutation(
+    convexMutation(api.finance.deleteRecurring, { id }),
+    "No se pudo eliminar el recurrente.",
+  );
 }
 
 // ─────────────────────────── ajustes ───────────────────────────
@@ -263,41 +264,36 @@ export async function updateIrpfPct(
     }
   }
 
-  const supabase = await requireAdmin();
-  const { data: settings } = await supabase
-    .from("finance_settings")
-    .select("irpf_pct")
-    .eq("id", true)
-    .maybeSingle();
-  const oldGlobal = settings?.irpf_pct ?? 37;
+  await requireAdmin();
+  const settings = await convexQuery(api.finance.settings, {});
+  const oldGlobal = settings?.irpfPct ?? 37;
 
   if (globalPct !== oldGlobal) {
-    await freezePastMonthsIrpf(supabase, oldGlobal);
-    const { error } = await supabase
-      .from("finance_settings")
-      .update({ irpf_pct: globalPct, updated_at: new Date().toISOString() })
-      .eq("id", true);
-    if (error) return { error: "No se pudo guardar el % global." };
+    try {
+      await freezePastMonthsIrpf(oldGlobal);
+      await convexMutation(api.finance.setGlobalIrpf, { irpfPct: globalPct });
+    } catch {
+      return { error: "No se pudo guardar el % global." };
+    }
   }
 
   if (monthPct !== null) {
-    const { error } = await supabase.from("finance_month_irpf").upsert(
-      {
+    try {
+      await convexMutation(api.finance.upsertMonthIrpf, {
         month,
-        irpf_pct: monthPct,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "month" },
-    );
-    if (error) return { error: "No se pudo guardar el % del mes." };
+        irpfPct: monthPct,
+      });
+    } catch {
+      return { error: "No se pudo guardar el % del mes." };
+    }
   } else if (month >= currentMadridMonth()) {
     // Campo vacío = seguir el global; en meses pasados no se toca la fila
     // para no des-congelar un mes ya cerrado.
-    const { error } = await supabase
-      .from("finance_month_irpf")
-      .delete()
-      .eq("month", month);
-    if (error) return { error: "No se pudo guardar el % del mes." };
+    try {
+      await convexMutation(api.finance.deleteMonthIrpf, { month });
+    } catch {
+      return { error: "No se pudo guardar el % del mes." };
+    }
   }
 
   revalidatePath(FINANCE_PATH);

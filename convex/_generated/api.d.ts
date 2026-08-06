@@ -9,6 +9,7 @@
  */
 
 import type * as blog from "../blog.js";
+import type * as finance from "../finance.js";
 import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
 import type * as migration from "../migration.js";
@@ -21,6 +22,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   blog: typeof blog;
+  finance: typeof finance;
   "lib/server": typeof lib_server;
   links: typeof links;
   migration: typeof migration;

@@ -27,12 +27,24 @@ Estado vivo de la migración. Proyecto Convex: team `paat-jumps`, proyecto `paat
 ### F2 — Capa de datos Convex + swap del código Next
 
 Crear queries/mutations en `convex/` por área y cambiar cada módulo de `lib/` para llamarlas
-(vía `fetchQuery`/`fetchMutation` de `convex/nextjs` en servidor). Orden por riesgo creciente:
+(vía `fetchQuery`/`fetchMutation` de `convex/nextjs` en servidor). Todo el trabajo va en la
+rama `convex-migration` (NO mergear a main hasta F5: el push a main despliega a prod y prod
+aún no tiene Convex).
 
-1. **Links** (`short_links`): `lib/crm/link-actions.ts`, `app/l/[slug]/route.ts`,
-   `app/admin/(panel)/links/page.tsx`. El RPC `register_link_click` pasa a ser una mutation
-   (lookup por slug con fallback a `aliases` escaneando la tabla — 4 filas — y `clicks + 1`).
-2. **Blog** (`blog_posts`): `lib/blog/queries.ts` (público), `lib/crm/blog-actions.ts`.
+Puente hasta F3: las funciones "server-only" exigen `serverKey` (env `SERVER_KEY` en Convex
+= `CONVEX_SERVER_KEY` en Next), validado por `convex/lib/server.ts`; los helpers
+`convexQuery`/`convexMutation` de `lib/convex/server.ts` lo inyectan. Patrón de swap: los
+adaptadores de `lib/` devuelven la forma legacy (snake_case, ISO, null) para no tocar
+componentes; al editar, las mutations escriben las claves opcionales con `undefined`
+explícito (borra el campo = poner a null en Postgres).
+
+Orden por riesgo creciente:
+
+1. **Links** — HECHO (`convex/links.ts`; el RPC `register_link_click` es ahora la mutation
+   `resolveAndRegisterClick`, alias y renombrado transaccionales). Verificado en dev:
+   redirect con UTMs + contador.
+2. **Blog** — HECHO (`convex/blog.ts`; cache tag de Next sigue siendo el publicador, las
+   queries públicas reciben `now` del caller). Verificado en dev: /blog y /blog/[slug].
 3. **Finanzas**: `lib/crm/finance.ts`, `lib/crm/finance-actions.ts`. El upsert
    `onConflict recurring_id,period` → índice `by_recurring_and_period` + insert-si-no-existe
    dentro de la mutation (transaccional). Singleton `finance_settings` → `.first()`.
