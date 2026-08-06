@@ -333,7 +333,9 @@ export default defineSchema({
     .index("by_contact", ["contactId"])
     .index("by_checkout_token", ["checkoutToken"])
     .index("by_cart_token", ["cartToken"])
-    .index("by_name", ["name"]),
+    .index("by_name", ["name"])
+    // Atribución de ventas por código promocional (/admin/promotions)
+    .index("by_discount_code", ["discountCode"]),
 
   customers: defineTable({
     customerId: v.number(), // id de Shopify

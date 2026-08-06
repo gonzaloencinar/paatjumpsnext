@@ -422,34 +422,40 @@ export async function getAutomationDetail(id: string) {
 }
 
 export async function listPromotions() {
-  const supabase = await createClient();
-  const { data: promotions, error } = await supabase
-    .from("promotions")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const promotions = await convexQuery(api.promotions.list, {});
 
   // Atribución por código (orders llega con los webhooks de Fase 2).
   const stats = new Map<string, { revenue: number; orders: number }>();
-  const codes = (promotions ?? []).map((p) => p.code);
+  const codes = promotions.map((p) => p.code);
   if (codes.length > 0) {
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("discount_code, total_price")
-      .in("discount_code", codes)
-      .limit(5000);
-    for (const order of orders ?? []) {
-      if (!order.discount_code) continue;
-      const entry = stats.get(order.discount_code) ?? { revenue: 0, orders: 0 };
-      entry.revenue += order.total_price ?? 0;
+    const orders = await convexQuery(api.promotions.ordersByDiscountCodes, {
+      codes,
+    });
+    for (const order of orders) {
+      const entry = stats.get(order.discountCode) ?? { revenue: 0, orders: 0 };
+      entry.revenue += order.totalPrice ?? 0;
       entry.orders += 1;
-      stats.set(order.discount_code, entry);
+      stats.set(order.discountCode, entry);
     }
   }
 
-  return (promotions ?? []).map((promotion) => ({
-    ...promotion,
-    stats: stats.get(promotion.code) ?? { revenue: 0, orders: 0 },
+  // Forma legacy (snake_case, ISO, null) que esperan los componentes
+  return promotions.map((doc) => ({
+    id: doc._id as string,
+    type: doc.type,
+    name: doc.name,
+    code: doc.code,
+    percentage: doc.percentage,
+    affiliate_name: doc.affiliateName ?? null,
+    affiliate_commission_pct: doc.affiliateCommissionPct ?? null,
+    starts_at: new Date(doc.startsAt).toISOString(),
+    ends_at: msToIso(doc.endsAt),
+    active: doc.active,
+    announce: doc.announce,
+    shopify_discount_id: doc.shopifyDiscountId ?? null,
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.updatedAt).toISOString(),
+    stats: stats.get(doc.code) ?? { revenue: 0, orders: 0 },
   }));
 }
 
