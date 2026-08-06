@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { getCart } from "lib/shopify";
-import { enrollCheckoutInCartRecovery } from "@/lib/crm/automation-engine";
 import { IDENTITY_COOKIE } from "@/lib/crm/identity";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 import { verifyIdentityToken } from "@/lib/email/tokens";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 // Recuperación de carritos que NO llegan al checkout de Shopify: si el
 // visitante está identificado (cookie pj_contact — llegó desde un email del
@@ -13,6 +13,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // El recovery_url es el checkoutUrl del carrito: restaura todo en un clic.
 // Si el cliente sí pisa el checkout, el webhook casa por cart_token y el
 // checkout real toma el relevo (route.ts). Best-effort: jamás rompe el carrito.
+// Toda la lógica de datos (contacto suscrito, unicidad por cart_token, id
+// negativo, inscripción/cancelación) vive en la mutation transaccional
+// api.carts.trackStorefrontCart.
 
 export async function trackStorefrontCart() {
   try {
@@ -28,24 +31,6 @@ export async function trackStorefrontCart() {
     const cartToken = cart.id.split("/").pop()?.split("?")[0];
     if (!cartToken) return;
 
-    const supabase = createAdminClient();
-    const { data: contact } = await supabase
-      .from("contacts")
-      .select("id, status")
-      .eq("email", email)
-      .maybeSingle();
-    if (!contact || contact.status !== "subscribed") return;
-
-    // Si este carrito ya pisó el checkout de Shopify, el webhook manda
-    const { data: shopifyCheckout } = await supabase
-      .from("checkouts")
-      .select("id")
-      .eq("cart_token", cartToken)
-      .eq("origin", "shopify")
-      .limit(1)
-      .maybeSingle();
-    if (shopifyCheckout) return;
-
     const lineItems = cart.lines.slice(0, 25).map((line) => ({
       title: line.merchandise.product.title,
       variant:
@@ -58,68 +43,15 @@ export async function trackStorefrontCart() {
           ? (Number(line.cost.totalAmount.amount) / line.quantity).toFixed(2)
           : line.cost.totalAmount.amount,
     }));
-    const now = new Date().toISOString();
 
-    const { data: existing } = await supabase
-      .from("checkouts")
-      .select("id, status")
-      .eq("cart_token", cartToken)
-      .eq("origin", "storefront")
-      .maybeSingle();
-
-    let checkoutId: number;
-    if (existing) {
-      // reached_checkout/converted no se reabren: ese carrito ya siguió su vida
-      if (existing.status !== "abandoned") return;
-      checkoutId = existing.id;
-      await supabase
-        .from("checkouts")
-        .update({
-          contact_id: contact.id,
-          email,
-          currency: cart.cost.totalAmount.currencyCode,
-          total_price: Number(cart.cost.totalAmount.amount),
-          line_items: lineItems,
-          recovery_url: cart.checkoutUrl,
-          last_event_at: now,
-        })
-        .eq("id", existing.id);
-    } else {
-      if (lineItems.length === 0) return;
-      const { data: created, error } = await supabase
-        .from("checkouts")
-        .insert({
-          origin: "storefront",
-          cart_token: cartToken,
-          contact_id: contact.id,
-          email,
-          currency: cart.cost.totalAmount.currencyCode,
-          total_price: Number(cart.cost.totalAmount.amount),
-          line_items: lineItems,
-          recovery_url: cart.checkoutUrl,
-          status: "abandoned",
-          abandoned_at: now,
-          last_event_at: now,
-        })
-        .select("id")
-        .single();
-      // Carrera entre dos mutaciones simultáneas: el unique parcial por
-      // cart_token deja ganar a una; la siguiente mutación actualizará.
-      if (error || !created) return;
-      checkoutId = created.id;
-    }
-
-    // Carrito vaciado a propósito → nada que recuperar
-    if (lineItems.length === 0) {
-      await supabase
-        .from("automation_enrollments")
-        .update({ status: "canceled", next_run_at: null })
-        .eq("checkout_id", checkoutId)
-        .eq("status", "active");
-      return;
-    }
-
-    await enrollCheckoutInCartRecovery(supabase, contact.id, checkoutId);
+    await convexMutation(api.carts.trackStorefrontCart, {
+      email,
+      cartToken,
+      currency: cart.cost.totalAmount.currencyCode,
+      totalPrice: Number(cart.cost.totalAmount.amount),
+      lineItems,
+      recoveryUrl: cart.checkoutUrl,
+    });
   } catch (error) {
     console.error("[local-cart] tracking falló", error);
   }

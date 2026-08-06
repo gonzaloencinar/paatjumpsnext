@@ -1,11 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/convex/_generated/api";
+import { convexMutation } from "@/lib/convex/server";
 
 // Webhooks de Resend (plan §9): entregas/rebotes/quejas/aperturas/clics →
 // email_sends + suppressions + events. Firmados con Svix; verificación manual
 // (HMAC-SHA256 de "id.timestamp.payload" con el secret whsec_) para no añadir
-// dependencia.
+// dependencia. Las escrituras van en una sola mutation Convex transaccional
+// (api.emails.applyResendEvent): lookup por provider_message_id, estado del
+// envío, supresión espejo y actividad derivada del contacto.
 
 function verifySvixSignature(payload: string, headers: Headers): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
@@ -44,6 +47,21 @@ type ResendEvent = {
   };
 };
 
+const HANDLED_TYPES = new Set([
+  "email.delivered",
+  "email.bounced",
+  "email.complained",
+  "email.opened",
+  "email.clicked",
+] as const);
+
+type HandledType =
+  | "email.delivered"
+  | "email.bounced"
+  | "email.complained"
+  | "email.opened"
+  | "email.clicked";
+
 export async function POST(request: Request) {
   const payload = await request.text();
   if (!verifySvixSignature(payload, request.headers)) {
@@ -58,84 +76,18 @@ export async function POST(request: Request) {
   }
 
   const type = event.type ?? "";
-  const emailId = event.data?.email_id;
+  if (!HANDLED_TYPES.has(type as HandledType)) {
+    return NextResponse.json({ received: true });
+  }
+  const emailId = event.data?.email_id ?? null;
   const to = Array.isArray(event.data?.to) ? event.data.to[0] : event.data?.to;
   const email = to?.trim().toLowerCase() ?? null;
-  const supabase = createAdminClient();
 
-  const { data: send } = emailId
-    ? await supabase
-        .from("email_sends")
-        .select("id, contact_id, opened_at, clicked_at")
-        .eq("provider_message_id", emailId)
-        .maybeSingle()
-    : { data: null };
-
-  const now = new Date().toISOString();
-  const patch: { status?: string; opened_at?: string; clicked_at?: string } =
-    {};
-  let eventType: string | null = null;
-
-  switch (type) {
-    case "email.delivered":
-      patch.status = "delivered";
-      break;
-    case "email.bounced":
-      // Conservador: cualquier rebote suprime (deliverability > cobertura).
-      patch.status = "bounced";
-      break;
-    case "email.complained":
-      patch.status = "complained";
-      break;
-    case "email.opened":
-      if (!send?.opened_at) patch.opened_at = now;
-      eventType = "email_opened";
-      break;
-    case "email.clicked":
-      if (!send?.clicked_at) patch.clicked_at = now;
-      eventType = "email_clicked";
-      break;
-    default:
-      return NextResponse.json({ received: true });
-  }
-
-  if (send && Object.keys(patch).length > 0) {
-    await supabase.from("email_sends").update(patch).eq("id", send.id);
-  }
-
-  if (email && type === "email.bounced") {
-    await supabase
-      .from("suppressions")
-      .upsert({ email, reason: "hard_bounce" });
-    await supabase
-      .from("contacts")
-      .update({ status: "bounced" })
-      .eq("email", email);
-  }
-  if (email && type === "email.complained") {
-    await supabase.from("suppressions").upsert({ email, reason: "complaint" });
-    await supabase
-      .from("contacts")
-      .update({ status: "complained" })
-      .eq("email", email);
-  }
-
-  if (eventType && send?.contact_id) {
-    await supabase.from("events").insert({
-      contact_id: send.contact_id,
-      type: eventType,
-      payload: { email_send_id: send.id },
-    });
-    // Actividad derivada para segmentos (§16.2): activos vs dormidos
-    await supabase
-      .from("contacts")
-      .update(
-        eventType === "email_opened"
-          ? { last_open_at: now }
-          : { last_click_at: now },
-      )
-      .eq("id", send.contact_id);
-  }
+  await convexMutation(api.emails.applyResendEvent, {
+    type: type as HandledType,
+    emailId,
+    email,
+  });
 
   return NextResponse.json({ received: true });
 }

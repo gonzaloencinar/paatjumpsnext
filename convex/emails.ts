@@ -115,3 +115,101 @@ export const markFailed = mutation({
     return null;
   },
 });
+
+// Webhook de Resend (app/api/webhooks/resend/route.ts): entregas/rebotes/
+// quejas/aperturas/clics → email_sends + suppressions + events + actividad
+// derivada del contacto, todo en una transacción. La verificación Svix queda
+// en la ruta; aquí solo llegan eventos ya autenticados.
+export const applyResendEvent = mutation({
+  args: {
+    serverKey: v.string(),
+    type: v.union(
+      v.literal("email.delivered"),
+      v.literal("email.bounced"),
+      v.literal("email.complained"),
+      v.literal("email.opened"),
+      v.literal("email.clicked"),
+    ),
+    emailId: v.union(v.string(), v.null()), // provider_message_id
+    email: v.union(v.string(), v.null()), // destinatario, ya en lowercase
+  },
+  handler: async (ctx, { serverKey, type, emailId, email }) => {
+    assertServerKey(serverKey);
+    const now = Date.now();
+
+    const send = emailId
+      ? await ctx.db
+          .query("email_sends")
+          .withIndex("by_provider_message_id", (q) =>
+            q.eq("providerMessageId", emailId),
+          )
+          .first()
+      : null;
+
+    let eventType: string | null = null;
+    if (send) {
+      if (type === "email.delivered") {
+        await ctx.db.patch("email_sends", send._id, { status: "delivered" });
+      } else if (type === "email.bounced") {
+        // Conservador: cualquier rebote suprime (deliverability > cobertura)
+        await ctx.db.patch("email_sends", send._id, { status: "bounced" });
+      } else if (type === "email.complained") {
+        await ctx.db.patch("email_sends", send._id, { status: "complained" });
+      }
+    }
+    if (type === "email.opened") {
+      if (send && send.openedAt === undefined) {
+        await ctx.db.patch("email_sends", send._id, { openedAt: now });
+      }
+      eventType = "email_opened";
+    }
+    if (type === "email.clicked") {
+      if (send && send.clickedAt === undefined) {
+        await ctx.db.patch("email_sends", send._id, { clickedAt: now });
+      }
+      eventType = "email_clicked";
+    }
+
+    // Rebote/queja → supresión espejo + estado del contacto
+    if (email && (type === "email.bounced" || type === "email.complained")) {
+      const reason = type === "email.bounced" ? "hard_bounce" : "complaint";
+      const suppression = await ctx.db
+        .query("suppressions")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .first();
+      if (suppression) {
+        await ctx.db.patch("suppressions", suppression._id, { reason });
+      } else {
+        await ctx.db.insert("suppressions", { email, reason, createdAt: now });
+      }
+      const contact = await ctx.db
+        .query("contacts")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .first();
+      if (contact) {
+        await ctx.db.patch("contacts", contact._id, {
+          status: type === "email.bounced" ? "bounced" : "complained",
+        });
+      }
+    }
+
+    // Actividad derivada para segmentos (§16.2): activos vs dormidos
+    if (eventType && send?.contactId) {
+      await ctx.db.insert("events", {
+        contactId: send.contactId,
+        type: eventType,
+        payload: { email_send_id: send._id as string },
+        createdAt: now,
+      });
+      await ctx.db.patch(
+        "contacts",
+        send.contactId,
+        eventType === "email_opened"
+          ? { lastOpenAt: now }
+          : { lastClickAt: now },
+      );
+    }
+
+    return null;
+  },
+});

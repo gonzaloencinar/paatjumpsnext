@@ -16,12 +16,15 @@ import type * as carts from "../carts.js";
 import type * as contacts from "../contacts.js";
 import type * as dni from "../dni.js";
 import type * as emails from "../emails.js";
+import type * as engine from "../engine.js";
 import type * as finance from "../finance.js";
+import type * as lib_crm from "../lib/crm.js";
 import type * as lib_server from "../lib/server.js";
 import type * as links from "../links.js";
 import type * as migration from "../migration.js";
 import type * as promotions from "../promotions.js";
 import type * as shipments from "../shipments.js";
+import type * as shopifySync from "../shopifySync.js";
 import type * as store from "../store.js";
 
 import type {
@@ -39,12 +42,15 @@ declare const fullApi: ApiFromModules<{
   contacts: typeof contacts;
   dni: typeof dni;
   emails: typeof emails;
+  engine: typeof engine;
   finance: typeof finance;
+  "lib/crm": typeof lib_crm;
   "lib/server": typeof lib_server;
   links: typeof links;
   migration: typeof migration;
   promotions: typeof promotions;
   shipments: typeof shipments;
+  shopifySync: typeof shopifySync;
   store: typeof store;
 }>;
 

@@ -696,6 +696,81 @@ export const addSuppression = mutation({
   },
 });
 
+// ─────────────────── códigos de descuento (motor CRM) ───────────────────
+
+// Último código personal vigente del contacto (no canjeado y con margen de
+// caducidad) — lo reusa resolveRecoveryDiscount para no acumular códigos
+export const latestDiscountCodeForContact = query({
+  args: { serverKey: v.string(), contactId: v.string(), minExpiresAt: v.number() },
+  handler: async (ctx, { serverKey, contactId, minExpiresAt }) => {
+    assertServerKey(serverKey);
+    const id = ctx.db.normalizeId("contacts", contactId);
+    if (!id) return null;
+    const codes = await ctx.db
+      .query("discount_codes")
+      .withIndex("by_contact_and_created_at", (q) => q.eq("contactId", id))
+      .order("desc")
+      .take(50);
+    const valid = codes.find(
+      (c) =>
+        !c.redeemed && c.expiresAt !== undefined && c.expiresAt > minExpiresAt,
+    );
+    return valid?.code ?? null;
+  },
+});
+
+// Registra un código personal recién creado en Shopify (recuperación de carrito)
+export const insertDiscountCode = mutation({
+  args: {
+    serverKey: v.string(),
+    code: v.string(),
+    contactId: v.string(),
+    percentage: v.number(),
+    expiresAt: v.number(),
+    shopifyDiscountId: v.union(v.string(), v.null()),
+  },
+  handler: async (
+    ctx,
+    { serverKey, code, contactId, percentage, expiresAt, shopifyDiscountId },
+  ) => {
+    assertServerKey(serverKey);
+    const id = ctx.db.normalizeId("contacts", contactId);
+    if (!id) return null;
+    await ctx.db.insert("discount_codes", {
+      code,
+      contactId: id,
+      percentage,
+      expiresAt,
+      shopifyDiscountId: shopifyDiscountId ?? undefined,
+      redeemed: false,
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// assign_discount_code legacy: asigna transaccionalmente el primer código
+// libre del pool (contactId ausente, el más antiguo) a un contacto. La
+// serialización de la mutation sustituye al FOR UPDATE SKIP LOCKED: dos altas
+// simultáneas nunca reciben el mismo código.
+export const assignDiscountCode = mutation({
+  args: { serverKey: v.string(), contactId: v.string() },
+  handler: async (ctx, { serverKey, contactId }) => {
+    assertServerKey(serverKey);
+    const id = ctx.db.normalizeId("contacts", contactId);
+    if (!id) return null;
+    const free = await ctx.db
+      .query("discount_codes")
+      .withIndex("by_contact_and_created_at", (q) =>
+        q.eq("contactId", undefined),
+      )
+      .first();
+    if (!free) return null;
+    await ctx.db.patch("discount_codes", free._id, { contactId: id });
+    return { code: free.code, expiresAt: free.expiresAt ?? null };
+  },
+});
+
 export const removeSuppression = mutation({
   args: { serverKey: v.string(), email: v.string() },
   handler: async (ctx, { serverKey, email }) => {
