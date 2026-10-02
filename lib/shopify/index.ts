@@ -115,6 +115,18 @@ export async function shopifyFetch<T>({
       }),
     });
 
+    // Un 5xx/429 de Shopify no debe leerse como "no existe": si llegase como
+    // data vacía, la página haría notFound() y ese 404 quedaría cacheado días.
+    // Lanzar aquí evita que "use cache" guarde el resultado.
+    if (!result.ok) {
+      throw {
+        cause: result.statusText || "unknown",
+        status: result.status,
+        message: `Shopify Storefront API respondió ${result.status}`,
+        query,
+      };
+    }
+
     const body = await result.json();
 
     if (body.errors) {
@@ -369,7 +381,6 @@ export async function getCollection(
 ): Promise<Collection | undefined> {
   "use cache";
   cacheTag(TAGS.collections);
-  cacheLife("days");
 
   const res = await shopifyFetch<ShopifyCollectionOperation>({
     query: getCollectionQuery,
@@ -379,7 +390,11 @@ export async function getCollection(
     },
   });
 
-  return reshapeCollection(res.body.data.collection);
+  const collection = reshapeCollection(res.body.data.collection);
+  // Un null (colección despublicada un momento, glitch de Shopify) acaba en
+  // 404: cachearlo días deja la categoría caída mucho después de arreglarse.
+  cacheLife(collection ? "days" : "minutes");
+  return collection;
 }
 
 export async function getCollectionProducts({
@@ -584,9 +599,9 @@ export async function getProduct(
 ): Promise<Product | undefined> {
   "use cache";
   cacheTag(TAGS.products);
-  cacheLife("days");
 
   if (!endpoint) {
+    cacheLife("minutes");
     console.log(`Skipping getProduct for '${handle}' - Shopify not configured`);
     return undefined;
   }
@@ -599,7 +614,10 @@ export async function getProduct(
     },
   });
 
-  return reshapeProduct(res.body.data.product, false);
+  const product = reshapeProduct(res.body.data.product, false);
+  // Igual que getCollection: un 404 de producto no se cachea días.
+  cacheLife(product ? "days" : "minutes");
+  return product;
 }
 
 export async function getProductRecommendations(
