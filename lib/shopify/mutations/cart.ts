@@ -72,7 +72,7 @@ export const removeFromCartMutation = /* GraphQL */ `
 export const applyDiscountMutation = /* GraphQL */ `
   mutation cartDiscountCodesUpdate(
     $cartId: ID!
-    $discountCodes: [String!]
+    $discountCodes: [String!]!
     $country: CountryCode
     $language: LanguageCode
   ) @inContext(country: $country, language: $language) {

@@ -158,6 +158,13 @@ export const proxy = convexAuthNextjsMiddleware(
 
     return response;
   },
+  {
+    // Por defecto Convex Auth trata cualquier GET con ?code= como un código
+    // OAuth/magic link: intenta canjearlo y redirige quitando el parámetro, lo
+    // que se comía los enlaces con descuento (?code=MARIAJUMPS). Solo usamos el
+    // provider Password, así que nunca hay código que canjear.
+    shouldHandleCode: false,
+  },
 );
 
 export const config = {
